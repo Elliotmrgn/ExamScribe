@@ -10,37 +10,92 @@ import PySimpleGUI as sg
 
 
 def extract_chapter_outline(pdf_reader):
+    def process_item(item, current_chapter):
+
+
     # Contains title and page number in table of contents (might not need)
     table_of_contents = []
-    # Contains title and page number for chapters with questions
     chapter_outline = []
-    # Contains title and page number for chapters with answers
-    answer_outline = []
-    for item in pdf_reader.outline:
+
+    # Initialize variables to store the previous chapter's starting page number
+    current_chapter = 0
+    for item in pdf_reader.info:
+
         if isinstance(item, list):
             for subitem in item:
-                table_of_contents.append([subitem.title, pdf_reader.get_destination_page_number(subitem)])
-                if subitem.title.startswith('Chapter '):
-                    chapter_outline.append([subitem.title, pdf_reader.get_destination_page_number(subitem)])
+                title = subitem.title
+                page_num = pdf_reader.get_destination_page_number(subitem)
+                table_of_contents.append([title, page_num])
+                if current_chapter:
+                    if chapter_outline[current_chapter - 1]["end_page"] is None:
+                        chapter_outline[current_chapter - 1]["end_page"] = page_num - 1
+
+                    else:
+                        chapter_outline[current_chapter - 1]["answer_end_page"] = page_num - 1
+                if title.startswith('Chapter '):
+                    chapter_outline.append({
+                        "chapter_number": title[8],
+                        "chapter_name": title,
+                        "start_page": page_num,
+                        "end_page": None,
+                        "answer_start_page": None,
+                        "answer_end_page": None
+                    })
+                    current_chapter += 1
+
                 elif subitem.title.startswith('Answers to Chapter '):
-                    answer_outline.append([subitem.title, pdf_reader.get_destination_page_number(subitem)])
+                    chapter_outline[current_chapter]["answer_start_page"] = page_num
+                    current_chapter += 1
+
+                else:
+                    current_chapter = 0
 
         else:
-            table_of_contents.append([item.title, pdf_reader.get_destination_page_number(item)])
-            if item.title.startswith('Chapter '):
-                chapter_outline.append([item.title, pdf_reader.get_destination_page_number(item)])
+            title = item.title
+            page_num = pdf_reader.get_destination_page_number(item)
+            table_of_contents.append([title, page_num])
+
+            if current_chapter:
+                if chapter_outline[current_chapter - 1]["end_page"] is None:
+                    chapter_outline[current_chapter - 1]["end_page"] = page_num - 1
+
+                else:
+                    chapter_outline[current_chapter - 1]["answer_end_page"] = page_num - 1
+            if title.startswith('Chapter '):
+                chapter_outline.append({
+                    "chapter_number": title[8],
+                    "chapter_name": title,
+                    "start_page": page_num,
+                    "end_page": None,
+                    "answer_start_page": None,
+                    "answer_end_page": None
+                })
+                current_chapter += 1
+
             elif item.title.startswith('Answers to Chapter '):
-                answer_outline.append([item.title, pdf_reader.get_destination_page_number(item)])
-    return table_of_contents, chapter_outline, answer_outline
+                chapter_outline[current_chapter]["answer_start_page"] = page_num
+                current_chapter += 1
+
+            else:
+                current_chapter = 0
+
+    return table_of_contents, chapter_outline
+
 
 def extract_questions(pdf_reader):
     pass
+
+
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
     try:
         pdf_reader = pypdf.PdfReader(file_path)
         table_of_contents, chapter_outline, answer_outline = extract_chapter_outline(pdf_reader)
-        starting_page_num = chapter_outline[0][1]
+        current_chapter = 0
+        for chapter in chapter_outline:
+            current_chapter += 1
+            starting_page_num = chapter[1]
+            ending_page_num = chapter_outline[current_chapter]
 
         # extract image and save -- change filename to question number
         # for image in pdf_reader.pages[24].images:
