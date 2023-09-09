@@ -3,19 +3,32 @@ import os
 import random
 import re
 
-import PyPDF2
+import pypdf
 import pickle
 
 import PySimpleGUI as sg
 
 
+def extract_chapter_outline(pdf_reader):
+    chapter_outline = []
+    for item in pdf_reader.outline:
+        if isinstance(item, list):
+            for subitem in item:
+                current = [subitem.title, pdf_reader.get_destination_page_number(subitem)]
+                chapter_outline.append(current)
+
+        else:
+            current = [item.title, pdf_reader.get_destination_page_number(item)]
+            chapter_outline.append(current)
+    return chapter_outline
+
 # Function to open and process the selected PDF file
-def start_process_pdf(file_path):
+def pdf_processing(file_path):
     try:
-        pdf_reader = PyPDF2.PdfReader(file_path)
+        pdf_reader = pypdf.PdfReader(file_path)
+        print(extract_chapter_outline(pdf_reader))
 
         for item in pdf_reader.outline:
-            print("*************************")
             if isinstance(item, list):
                 for subitem in item:
                     print(subitem.title)
@@ -24,7 +37,13 @@ def start_process_pdf(file_path):
             else:
                 print(item.title)
                 print(pdf_reader.get_destination_page_number(item))
-        print(pdf_reader.pages[24].images)
+
+        # extract image and save -- change filename to question number
+        # for image in pdf_reader.pages[24].images:
+        #     with open(image.name, "wb") as fp:
+        #         fp.write(image.data)
+
+
         # Add more processing code here as needed
     except Exception as e:
         sg.popup_error(f"Error: {e}")
@@ -68,7 +87,7 @@ def main():
         elif event == "Process PDF":
             file_path = values["input_path"]
             if file_path:
-                start_process_pdf(file_path)
+                pdf_processing(file_path)
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
 
