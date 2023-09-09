@@ -9,114 +9,125 @@ import pickle
 import PySimpleGUI as sg
 
 
-def extract_chapter_outline(pdf_reader):
-    # Contains title and page number in table of contents (might not need)
-    table_of_contents = []
-    chapter_outline = []
-
-    # Initialize variables to store the previous chapter's starting page number
-    current_chapter = 0
-    for item in pdf_reader.info:
-
-        if isinstance(item, list):
-            for subitem in item:
-                title = subitem.title
-                page_num = pdf_reader.get_destination_page_number(subitem)
-                table_of_contents.append([title, page_num])
-                if current_chapter:
-                    if chapter_outline[current_chapter - 1]["end_page"] is None:
-                        chapter_outline[current_chapter - 1]["end_page"] = page_num - 1
-
-                    else:
-                        chapter_outline[current_chapter - 1]["answer_end_page"] = page_num - 1
-                if title.startswith('Chapter '):
-                    chapter_outline.append({
-                        "chapter_number": title[8],
-                        "chapter_name": title,
-                        "start_page": page_num,
-                        "end_page": None,
-                        "answer_start_page": None,
-                        "answer_end_page": None
-                    })
-                    current_chapter += 1
-
-                elif subitem.title.startswith('Answers to Chapter '):
-                    chapter_outline[current_chapter]["answer_start_page"] = page_num
-                    current_chapter += 1
-
-                else:
-                    current_chapter = 0
-
-        else:
-            title = item.title
-            page_num = pdf_reader.get_destination_page_number(item)
-            table_of_contents.append([title, page_num])
-
-            if current_chapter:
-                if chapter_outline[current_chapter - 1]["end_page"] is None:
-                    chapter_outline[current_chapter - 1]["end_page"] = page_num - 1
-
-                else:
-                    chapter_outline[current_chapter - 1]["answer_end_page"] = page_num - 1
-            if title.startswith('Chapter '):
-                chapter_outline.append({
-                    "chapter_number": title[8],
-                    "chapter_name": title,
-                    "start_page": page_num,
-                    "end_page": None,
-                    "answer_start_page": None,
-                    "answer_end_page": None
-                })
-                current_chapter += 1
-
-            elif item.title.startswith('Answers to Chapter '):
-                chapter_outline[current_chapter]["answer_start_page"] = page_num
-                current_chapter += 1
-
-            else:
-                current_chapter = 0
-
-    return table_of_contents, chapter_outline
-
+# TEST REMAKING PDF
 
 # def extract_chapter_outline(pdf_reader):
-#   GPT VERSION TEST LATER
-#     def process_item(item):
-#         title = item.title
-#         page_num = pdf_reader.get_destination_page_number(item)
-#         table_of_contents.append([title, page_num])
-#
-#         if current_chapter:
-#             key = "end_page" if chapter_outline[current_chapter - 1]["end_page"] is None else "answer_end_page"
-#             chapter_outline[current_chapter - 1][key] = page_num - 1
-#
-#         if title.startswith('Chapter '):
-#             chapter_outline.append({
-#                 "chapter_number": title[8],
-#                 "chapter_name": title,
-#                 "start_page": page_num,
-#                 "end_page": None,
-#                 "answer_start_page": None,
-#                 "answer_end_page": None
-#             })
-#             return current_chapter + 1
-#
-#         elif title.startswith('Answers to Chapter '):
-#             chapter_outline[current_chapter]["answer_start_page"] = page_num
-#             return current_chapter + 1
-#
-#         return 0
-#
+#     # Contains title and page number in table of contents (might not need)
 #     table_of_contents = []
 #     chapter_outline = []
+#
+#     # Initialize variables to store the previous chapter's starting page number
 #     current_chapter = 0
+#     for item in pdf_reader.outline:
+#         print(f"ITEM: {item}")
+#         if isinstance(item, list):
+#             for subitem in item:
+#                 title = subitem.title
+#                 page_num = pdf_reader.get_destination_page_number(subitem)
+#                 table_of_contents.append([title, page_num])
+#                 if current_chapter:
+#                     if chapter_outline[current_chapter - 1]["end_page"] is None:
+#                         chapter_outline[current_chapter - 1]["end_page"] = page_num - 1
 #
-#     items_to_process = (subitem for item in pdf_reader.info if isinstance(item, list) for subitem in item)  # Generator
+#                     else:
+#                         chapter_outline[current_chapter - 1]["answer_end_page"] = page_num - 1
+#                 if title.startswith('Chapter '):
+#                     chapter_outline.append({
+#                         "chapter_number": title[8],
+#                         "chapter_name": title,
+#                         "start_page": page_num,
+#                         "end_page": None,
+#                         "answer_start_page": None,
+#                         "answer_end_page": None
+#                     })
+#                     current_chapter += 1
 #
-#     for item in items_to_process:
-#         current_chapter = process_item(item)
+#                 elif subitem.title.startswith('Answers to Chapter '):
+#                     chapter_outline[current_chapter]["answer_start_page"] = page_num
+#                     current_chapter += 1
+#
+#                 else:
+#                     current_chapter = 0
+#
+#         else:
+#             title = item.title
+#             page_num = pdf_reader.get_destination_page_number(item)
+#             table_of_contents.append([title, page_num])
+#
+#             if current_chapter:
+#                 if chapter_outline[current_chapter - 1]["end_page"] is None:
+#                     chapter_outline[current_chapter - 1]["end_page"] = page_num - 1
+#
+#                 else:
+#                     chapter_outline[current_chapter - 1]["answer_end_page"] = page_num - 1
+#             if title.startswith('Chapter '):
+#                 chapter_outline.append({
+#                     "chapter_number": title[8],
+#                     "chapter_name": title,
+#                     "start_page": page_num,
+#                     "end_page": None,
+#                     "answer_start_page": None,
+#                     "answer_end_page": None
+#                 })
+#                 current_chapter += 1
+#
+#             elif item.title.startswith('Answers to Chapter '):
+#                 chapter_outline[current_chapter]["answer_start_page"] = page_num
+#                 current_chapter += 1
+#
+#             else:
+#                 current_chapter = 0
 #
 #     return table_of_contents, chapter_outline
+
+
+def extract_chapter_outline(pdf_reader):
+    # GPT VERSION TEST LATER
+    def process_item(item, current_chapter):
+        print(f"ITEM:  {item}")
+        title = item.title
+        print(f"ITEM TITLE:  {title}")
+        page_num = pdf_reader.get_destination_page_number(item)
+        table_of_contents.append([title, page_num])
+
+        if current_chapter:
+            key = "end_page" if chapter_outline[current_chapter - 1]["end_page"] is None else "answer_end_page"
+            chapter_outline[current_chapter - 1][key] = page_num - 1
+
+        if title.startswith('Chapter '):
+            chapter_outline.append({
+                "chapter_number": title[8],
+                "chapter_name": title,
+                "start_page": page_num,
+                "end_page": None,
+                "answer_start_page": None,
+                "answer_end_page": None
+            })
+            return current_chapter + 1
+
+        elif title.startswith('Answers to Chapter '):
+            chapter_outline[current_chapter]["answer_start_page"] = page_num
+            return current_chapter + 1
+
+        return 0
+
+    def recursive_generator(items):
+        for item in items:
+            if isinstance(item, list):
+                yield from recursive_generator(item)
+            else:
+                yield item
+
+    table_of_contents = []
+    chapter_outline = []
+    current_chapter = 0
+
+    items_to_process = recursive_generator(pdf_reader.outline)
+
+    for item in items_to_process:
+        current_chapter=process_item(item, current_chapter)
+
+    return table_of_contents, chapter_outline
 
 
 def extract_questions(pdf_reader):
@@ -125,23 +136,22 @@ def extract_questions(pdf_reader):
 
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
-    try:
-        pdf_reader = pypdf.PdfReader(file_path)
-        table_of_contents, chapter_outline, answer_outline = extract_chapter_outline(pdf_reader)
-        current_chapter = 0
-        for chapter in chapter_outline:
-            current_chapter += 1
-            starting_page_num = chapter[1]
-            ending_page_num = chapter_outline[current_chapter]
+    # try:
+    pdf_reader = pypdf.PdfReader(file_path)
+    print(f"PDF READER: {pdf_reader.outline}")
+    table_of_contents, chapter_outline = extract_chapter_outline(pdf_reader)
+    print(table_of_contents)
+    print(json.dumps(chapter_outline, indent=3))
+    # extract image and save -- change filename to question number
+    # for image in pdf_reader.pages[24].images:
+    #     with open(image.name, "wb") as fp:
+    #         fp.write(image.data)
 
-        # extract image and save -- change filename to question number
-        # for image in pdf_reader.pages[24].images:
-        #     with open(image.name, "wb") as fp:
-        #         fp.write(image.data)
+    # Add more processing code here as needed
 
-        # Add more processing code here as needed
-    except Exception as e:
-        sg.popup_error(f"Error: {e}")
+
+# except Exception as e:
+#     sg.popup_error(f"Error: {e}")
 
 
 # Function to load PDF titles and file paths from a text file
