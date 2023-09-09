@@ -24,10 +24,7 @@ def start_process_pdf(file_path):
             else:
                 print(item.title)
                 print(pdf_reader.get_destination_page_number(item))
-
-
-        num_pages = len(pdf_reader.pages)
-        sg.popup(f"Selected PDF has {num_pages} pages.")
+        print(pdf_reader.pages[24].images)
         # Add more processing code here as needed
     except Exception as e:
         sg.popup_error(f"Error: {e}")
