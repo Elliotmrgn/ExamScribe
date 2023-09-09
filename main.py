@@ -10,9 +10,6 @@ import PySimpleGUI as sg
 
 
 def extract_chapter_outline(pdf_reader):
-    def process_item(item, current_chapter):
-
-
     # Contains title and page number in table of contents (might not need)
     table_of_contents = []
     chapter_outline = []
@@ -80,6 +77,46 @@ def extract_chapter_outline(pdf_reader):
                 current_chapter = 0
 
     return table_of_contents, chapter_outline
+
+
+# def extract_chapter_outline(pdf_reader):
+#   GPT VERSION TEST LATER
+#     def process_item(item):
+#         title = item.title
+#         page_num = pdf_reader.get_destination_page_number(item)
+#         table_of_contents.append([title, page_num])
+#
+#         if current_chapter:
+#             key = "end_page" if chapter_outline[current_chapter - 1]["end_page"] is None else "answer_end_page"
+#             chapter_outline[current_chapter - 1][key] = page_num - 1
+#
+#         if title.startswith('Chapter '):
+#             chapter_outline.append({
+#                 "chapter_number": title[8],
+#                 "chapter_name": title,
+#                 "start_page": page_num,
+#                 "end_page": None,
+#                 "answer_start_page": None,
+#                 "answer_end_page": None
+#             })
+#             return current_chapter + 1
+#
+#         elif title.startswith('Answers to Chapter '):
+#             chapter_outline[current_chapter]["answer_start_page"] = page_num
+#             return current_chapter + 1
+#
+#         return 0
+#
+#     table_of_contents = []
+#     chapter_outline = []
+#     current_chapter = 0
+#
+#     items_to_process = (subitem for item in pdf_reader.info if isinstance(item, list) for subitem in item)  # Generator
+#
+#     for item in items_to_process:
+#         current_chapter = process_item(item)
+#
+#     return table_of_contents, chapter_outline
 
 
 def extract_questions(pdf_reader):
