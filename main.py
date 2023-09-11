@@ -76,10 +76,17 @@ def extract_questions(doc, chapter):
     question_bank = []
 
     for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
+        print(f"Page: {x}")
+
         doc_text = doc[x].get_text()
         page_questions = re.findall(regex_question_and_choices, doc_text, re.MULTILINE)
         spillover_check = re.findall(regex_choice_spillover, doc_text, re.MULTILINE)
-        # Checks if theres more sets of choices than questions. If so it adds to last question
+        if x == 92:
+            image_list = doc[x].get_images(full=True)
+            print(image_list)
+            quit()
+
+        # Checks if there's more sets of choices than questions. If so it adds to last question
         if len(spillover_check) > len(page_questions):
             clean_spilled_choices = choice_cleanup(spillover_check[0])
             question_bank[len(question_bank)-1]["choices"] += clean_spilled_choices
@@ -103,10 +110,10 @@ def pdf_processing(file_path):
     regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
-    # extract_questions(doc, chapter_map[1])
-    # quit()
+
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
+        quit()
 
     print(json.dumps(chapter_map[1], indent=2))
     quit()
