@@ -9,6 +9,7 @@ import pickle
 
 import PySimpleGUI as sg
 
+
 # TODO: Image check (chapter 2, q 34)
 
 def extract_chapter_map(doc):
@@ -59,7 +60,7 @@ def extract_chapter_map(doc):
             chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 2
             answer_match += 1
     # for i in chapter_map:
-        # print(i)
+    # print(i)
 
     return chapter_map
 
@@ -70,6 +71,7 @@ def extract_questions(doc, chapter):
         choice_text = [choice.strip() for choice in choice_text if choice.strip()]
         clean_choices = [[choice_text[i][0], choice_text[i + 1]] for i in range(0, len(choice_text), 2)]
         return clean_choices
+
     # -------------------------------------------------
     regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![A-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
@@ -89,7 +91,7 @@ def extract_questions(doc, chapter):
         # Checks if there's more sets of choices than questions. If so it adds to last question
         if len(spillover_check) > len(page_questions):
             clean_spilled_choices = choice_cleanup(spillover_check[0])
-            question_bank[len(question_bank)-1]["choices"] += clean_spilled_choices
+            question_bank[len(question_bank) - 1]["choices"] += clean_spilled_choices
         for question in page_questions:
             # Choices come out with lots of new lines, this cleans them up and matches them together
 
@@ -103,6 +105,20 @@ def extract_questions(doc, chapter):
     return question_bank
 
 
+def extract_answers(doc, chapter):
+    regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
+    x=0
+    for page in range(chapter["answer_start_page"], chapter["answer_end_page"]+1):
+        doc_text = doc[page].get_text()
+        answer_data = re.findall(regex_answers, doc_text, re.MULTILINE)
+        for answer in answer_data:
+            for answer_part in answer:
+                print(answer_part)
+
+        x+=0
+        if x == 3:
+            quit()
+
 
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
@@ -110,9 +126,10 @@ def pdf_processing(file_path):
     regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
-
+    extract_answers(doc, chapter_map[0])
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
+
         quit()
 
     print(json.dumps(chapter_map[1], indent=2))
