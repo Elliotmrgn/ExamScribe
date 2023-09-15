@@ -50,17 +50,29 @@ def extract_chapter_map(doc):
 
             })
         # TODO: create a check for actual answer start and end page
-        elif chapter[0] == 2 and chapter[1].startswith("Chapter "):  # TOC format option
+        elif chapter[1].startswith("Answers to Chapter ") or (chapter[0] == 2 and chapter[1].startswith("Chapter ")):
+            regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
             chapter_map[answer_match]["answer_start_page"] = chapter[2] - 1
-            chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 2
-            answer_match += 1
 
-        elif chapter[1].startswith("Answers to Chapter "):  # TOC format option
-            chapter_map[answer_match]["answer_start_page"] = chapter[2] - 1
-            chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 2
+            # Check for blank pages
+            i = 2
+            while True:
+                doc_text = doc[toc[i + 1][2]-i].get_text()
+                if not doc_text:
+                    i += 1
+                else:
+                    break
+
+            last_answer_page_data = re.findall(regex_answers, doc_text, re.MULTILINE)
+            if not last_answer_page_data:
+                last_answer_page_data = [[0]]
+
+            # check if last full page of answers has the final answer
+            if last_answer_page_data[-1][0] == chapter_map[answer_match]["total_questions"]:
+                chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 1
+            else:
+                chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 2
             answer_match += 1
-    # for i in chapter_map:
-    # print(i)
 
     return chapter_map
 
@@ -99,7 +111,7 @@ def extract_questions(doc, chapter):
             question_bank.append({
                 "number": int(question[0]),
                 "text": question[1].strip(),
-                "choices": choices
+                "choices": choices,
             })
 
     return question_bank
@@ -107,17 +119,38 @@ def extract_questions(doc, chapter):
 
 def extract_answers(doc, chapter):
     regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
-    x=0
+    regex_explanation_spillover = r"^(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
+    previous_result = 0
+
     for page in range(chapter["answer_start_page"], chapter["answer_end_page"]+1):
         doc_text = doc[page].get_text()
         answer_data = re.findall(regex_answers, doc_text, re.MULTILINE)
-        for answer in answer_data:
-            for answer_part in answer:
-                print(answer_part)
+        # adds explanation spillover to previous question
+        if previous_result:
+            spillover_text = doc_text.split('\n')
+            # checks if the page starts with a page number or chapter header to ignore
+            if spillover_text[0].strip().isdigit():
+                if "Chapter" in spillover_text[1] or "Answer" in spillover_text[1]:
+                    spillover_text = spillover_text[2:]
+            elif spillover_text[1].strip().isdigit():
+                spillover_text = spillover_text[2:]
+            elif "Chapter" in spillover_text[0] or "Answer" in spillover_text[0]:
+                spillover_text = spillover_text[1:]
 
-        x+=0
-        if x == 3:
-            quit()
+            spillover_text = '\n'.join(spillover_text)
+            spillover_text = re.search(regex_explanation_spillover, spillover_text, re.MULTILINE)
+            chapter["question_bank"][previous_result]["explanation"] += spillover_text.group()
+
+        for answer in answer_data:
+
+            question_num = int(answer[0].replace(' ', '')) - 1
+            answers_list = answer[1].split(', ')
+            chapter["question_bank"][question_num]["answer"] = answers_list
+            chapter["question_bank"][question_num]["explanation"] = answer[2]
+            if not answer[2].strip().endswith('.'):
+                previous_result = question_num
+            else:
+                previous_result = 0
 
 
 # Function to open and process the selected PDF file
@@ -126,10 +159,14 @@ def pdf_processing(file_path):
     regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
-    extract_answers(doc, chapter_map[0])
+    print(json.dumps(chapter_map, indent=2))
+    print(doc[489].get_text())
+    # print(doc[358].get_text())
+    quit()
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
-
+        extract_answers(doc, chapter)
+        # print(json.dumps(chapter, indent=2))
         quit()
 
     print(json.dumps(chapter_map[1], indent=2))
