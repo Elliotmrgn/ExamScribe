@@ -111,7 +111,8 @@ def extract_questions(doc, chapter):
             # Choices come out with lots of new lines, this cleans them up and matches them together
 
             choices = choice_cleanup(question[2].strip())
-            question_bank[int(question[0])] = {
+            question_num = int(question[0])
+            question_bank[question_num] = {
                     "question": question[1].strip(),
                     "choices": choices,
                 }
@@ -197,6 +198,21 @@ def load_previous_pdfs():
     pass
 
 
+def question_randomizer(pdf_questions, total_questions = 100):
+    total_chapters = len(pdf_questions)
+    chosen_questions = [[] for _ in range(total_chapters)]
+
+    for _ in range(total_questions):
+        random_chapter = random.randint(0, total_chapters - 1)
+        while True:
+            random_question = random.randint(1, pdf_questions[random_chapter]["total_questions"])
+            if random_question not in chosen_questions[random_chapter]:
+                chosen_questions[random_chapter].append(pdf_questions[random_chapter]["question_bank"][random_question])
+                break
+    chosen_questions = [item for sublist in chosen_questions for item in sublist]
+    random.shuffle(chosen_questions)
+    return chosen_questions
+
 def nav_window():
     # Define the layout of the GUI
     layout = [
@@ -246,17 +262,20 @@ def main():
             file_path = values["input_path"]
             if file_path:
                 pdf_questions = pdf_processing(test_path2)
-                quiz_questions = list(pdf_questions[0]["question_bank"].items())[:100]
-                quiz_questions = dict(quiz_questions)
-                print(json.dumps(quiz_questions, indent=1))
+                # print(json.dumps(pdf_questions, indent=1))
+                quiz_questions = question_randomizer(pdf_questions, 100)
+                # quiz_questions = list(pdf_questions[0]["question_bank"].items())[:100]
+                # quiz_questions = dict(quiz_questions)
+                # print(json.dumps(quiz_questions, indent=1))
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
         elif event == "Generate Quiz" and not quiz:
             current_question = 1
             score = 0
+
             if quiz_questions:
-                quiz = quiz_window(current_question, **quiz_questions[current_question])
+                quiz = quiz_window(current_question, **quiz_questions[current_question-1])
                 while True:
                     quiz_event, quiz_values = quiz.read()
                     print(quiz_values)
@@ -264,7 +283,10 @@ def main():
                         break
                     if quiz_event == "Submit":
                         selected_answer = [choice for choice, value in quiz_values.items() if value]
-                        if quiz_questions[current_question]["answer"] == selected_answer:
+                        print(json.dumps(quiz_questions[current_question-1], indent=1))
+                        print(selected_answer)
+                        print(quiz_questions[current_question-1]["answer"])
+                        if quiz_questions[current_question-1]["answer"] == selected_answer:
                             score += 1
                             print("Good Job!")
                         else:
