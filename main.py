@@ -149,11 +149,12 @@ def extract_answers(doc, chapter):
         for answer in answer_data:
 
             question_num = int(answer[0].replace(' ', '')) - 1
+
             # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
-            if question_num != 0 and "answers" not in chapter["question_bank"][0]:
+            if question_num != 0 and "answer" not in chapter["question_bank"][0]:
                 continue
             # check if there is already an answer built for the current question then break
-            elif "answers" in chapter["question_bank"][question_num]:
+            elif "answer" in chapter["question_bank"][question_num]:
                 # print(json.dumps(chapter, indent=2))
                 break
             # otherwise build the answer
@@ -170,13 +171,8 @@ def extract_answers(doc, chapter):
 
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
-    # try:
-    regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
-    # print(doc[123].get_text())
-    # print(json.dumps(chapter_map, indent=2))
-    # quit()
 
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
