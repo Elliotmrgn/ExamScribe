@@ -113,11 +113,9 @@ def extract_questions(doc, chapter):
             choices = choice_cleanup(question[2].strip())
             question_num = int(question[0])
             question_bank[question_num] = {
-                    "question": question[1].strip(),
-                    "choices": choices,
-                }
-
-
+                "question": question[1].strip(),
+                "choices": choices,
+            }
 
     return question_bank
 
@@ -127,7 +125,7 @@ def extract_answers(doc, chapter):
     regex_explanation_spillover = r"^(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     previous_result = 0
 
-    for page in range(chapter["answer_start_page"], chapter["answer_end_page"]+1):
+    for page in range(chapter["answer_start_page"], chapter["answer_end_page"] + 1):
         doc_text = doc[page].get_text()
         answer_data = re.findall(regex_answers, doc_text, re.MULTILINE)
         # -----------------------------------------------------------------------------------------
@@ -169,7 +167,6 @@ def extract_answers(doc, chapter):
                     previous_result = 0
 
 
-
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
     doc = fitz.open(file_path)
@@ -198,7 +195,7 @@ def load_previous_pdfs():
     pass
 
 
-def question_randomizer(pdf_questions, total_questions = 100):
+def question_randomizer(pdf_questions, total_questions=100):
     total_chapters = len(pdf_questions)
     chosen_questions = [[] for _ in range(total_chapters)]
 
@@ -212,6 +209,7 @@ def question_randomizer(pdf_questions, total_questions = 100):
     chosen_questions = [item for sublist in chosen_questions for item in sublist]
     random.shuffle(chosen_questions)
     return chosen_questions
+
 
 def nav_window():
     # Define the layout of the GUI
@@ -232,15 +230,12 @@ def quiz_window(question_number, question, choices, answer, explanation):
         [sg.Text(f'Question {question_number}: ')],
         [sg.Text(f"{question}")],
     ]
-
-    for i, choice in enumerate(choices):
-        if len(answer) == 1:
-            layout.append([sg.Radio(choice[1], question_number, key=choice[0])])
-        else:
-            # TODO: fix checkboxes starting prechecked
-            layout.append([sg.Checkbox(choice[1], question_number, key=choice[0])])
+    if len(answer) == 1:
+        choice_buttons = [[sg.Radio(choice[1], question_number, key=choice[0])] for choice in choices]
+    else:
+        choice_buttons = [[sg.Checkbox(choice[1], key=choice[0])] for choice in choices]
+    layout.append(choice_buttons)
     layout.append([sg.Button("Submit")])
-
 
     return sg.Window("Quiz", layout)
 
@@ -249,7 +244,7 @@ def quiz_window(question_number, question, choices, answer, explanation):
 def main():
     test_path = "CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test_path2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
-
+    sg.set_options(font=('Arial Bold', 16))
     nav = nav_window()
     quiz = None
     quiz_questions = None
@@ -275,26 +270,29 @@ def main():
             score = 0
 
             if quiz_questions:
-                quiz = quiz_window(current_question, **quiz_questions[current_question-1])
-                while True:
+                while current_question < 100:
+                    quiz = quiz_window(current_question, **quiz_questions[current_question - 1])
                     quiz_event, quiz_values = quiz.read()
                     print(quiz_values)
                     if quiz_event == sg.WINDOW_CLOSED:
                         break
                     if quiz_event == "Submit":
                         selected_answer = [choice for choice, value in quiz_values.items() if value]
-                        print(json.dumps(quiz_questions[current_question-1], indent=1))
+                        print(json.dumps(quiz_questions[current_question - 1], indent=1))
                         print(selected_answer)
-                        print(quiz_questions[current_question-1]["answer"])
-                        if quiz_questions[current_question-1]["answer"] == selected_answer:
+                        print(quiz_questions[current_question - 1]["answer"])
+                        if quiz_questions[current_question - 1]["answer"] == selected_answer:
                             score += 1
                             print("Good Job!")
                         else:
                             print("OOP")
+                        current_question += 1
+                        quiz.close()
+
+
+
             else:
                 sg.popup_error("You must load a PDF before generating a quiz")
-
-
 
     # Close the window
     nav.close()
