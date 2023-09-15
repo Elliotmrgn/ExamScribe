@@ -55,11 +55,11 @@ def extract_chapter_map(doc):
             chapter_map[answer_match]["answer_start_page"] = chapter[2] - 1
 
             # Check for blank pages
-            i = 2
+            blank_check = 2
             while True:
-                doc_text = doc[toc[i + 1][2]-i].get_text()
+                doc_text = doc[toc[i + 1][2] - blank_check].get_text()
                 if not doc_text:
-                    i += 1
+                    blank_check += 1
                 else:
                     break
 
@@ -69,9 +69,11 @@ def extract_chapter_map(doc):
 
             # check if last full page of answers has the final answer
             if last_answer_page_data[-1][0] == chapter_map[answer_match]["total_questions"]:
-                chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 1
-            else:
+                # if it doesn't, last page should be the same as next chapter starting page
                 chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 2
+            else:
+                # if it does, it should be a page before
+                chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 1
             answer_match += 1
 
     return chapter_map
@@ -95,10 +97,11 @@ def extract_questions(doc, chapter):
         doc_text = doc[x].get_text()
         page_questions = re.findall(regex_question_and_choices, doc_text, re.MULTILINE)
         spillover_check = re.findall(regex_choice_spillover, doc_text, re.MULTILINE)
-        if x == 92:
-            image_list = doc[x].get_images(full=True)
-            print(image_list)
-            quit()
+
+        # if x == 92:
+        #     image_list = doc[x].get_images(full=True)
+        #     print(image_list)
+        #     quit()
 
         # Checks if there's more sets of choices than questions. If so it adds to last question
         if len(spillover_check) > len(page_questions):
@@ -153,20 +156,22 @@ def extract_answers(doc, chapter):
                 previous_result = 0
 
 
+
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
     # try:
     regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
+    print(doc[384].get_text())
     print(json.dumps(chapter_map, indent=2))
-    print(doc[489].get_text())
-    # print(doc[358].get_text())
     quit()
+    # quit()
+
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
         extract_answers(doc, chapter)
-        # print(json.dumps(chapter, indent=2))
+        print(json.dumps(chapter, indent=2))
         quit()
 
     print(json.dumps(chapter_map[1], indent=2))
