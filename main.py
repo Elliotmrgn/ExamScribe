@@ -145,14 +145,18 @@ def extract_answers(doc, chapter):
             spillover_text = re.search(regex_explanation_spillover, spillover_text, re.MULTILINE)
             chapter["question_bank"][previous_result]["explanation"] += spillover_text.group()
         # -----------------------------------------------------------------------------------------
-
+        print(f"ANSWER PAGE: {page}")
         for answer in answer_data:
 
             question_num = int(answer[0].replace(' ', '')) - 1
-
-            if "answers" in chapter["question_bank"][question_num]:
+            # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
+            if question_num != 0 and "answers" not in chapter["question_bank"][0]:
+                continue
+            # check if there is already an answer built for the current question then break
+            elif "answers" in chapter["question_bank"][question_num]:
                 # print(json.dumps(chapter, indent=2))
                 break
+            # otherwise build the answer
             else:
                 answers_list = answer[1].split(', ')
                 chapter["question_bank"][question_num]["answer"] = answers_list
@@ -170,18 +174,15 @@ def pdf_processing(file_path):
     regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
-    # print(doc[384].get_text())
+    # print(doc[123].get_text())
     # print(json.dumps(chapter_map, indent=2))
-    # quit()
     # quit()
 
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
         extract_answers(doc, chapter)
-        print(json.dumps(chapter, indent=2))
-        quit()
-
-    print(json.dumps(chapter_map[1], indent=2))
+        # print(json.dumps(chapter, indent=2))
+    print(json.dumps(chapter_map, indent=2))
     quit()
     # extract image and save -- change filename to question number
     # for image in pdf_reader.pages[24].images:
