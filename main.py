@@ -89,11 +89,9 @@ def extract_questions(doc, chapter):
     # -------------------------------------------------
     regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![A-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
-    question_bank = []
+    question_bank = {}
 
     for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
-        print(f"Page: {x}")
-
         doc_text = doc[x].get_text()
         page_questions = re.findall(regex_question_and_choices, doc_text, re.MULTILINE)
         spillover_check = re.findall(regex_choice_spillover, doc_text, re.MULTILINE)
@@ -106,16 +104,19 @@ def extract_questions(doc, chapter):
         # Checks if there's more sets of choices than questions. If so it adds to last question
         if len(spillover_check) > len(page_questions):
             clean_spilled_choices = choice_cleanup(spillover_check[0])
-            question_bank[len(question_bank) - 1]["choices"] += clean_spilled_choices
+            # print(json.dumps(question_bank, indent=2))
+            last_question = len(question_bank)
+            question_bank[last_question]["choices"] += clean_spilled_choices
         for question in page_questions:
             # Choices come out with lots of new lines, this cleans them up and matches them together
 
             choices = choice_cleanup(question[2].strip())
-            question_bank.append({
-                "number": int(question[0]),
-                "text": question[1].strip(),
-                "choices": choices,
-            })
+            question_bank[int(question[0])] = {
+                    "question": question[1].strip(),
+                    "choices": choices,
+                }
+
+
 
     return question_bank
 
@@ -145,13 +146,12 @@ def extract_answers(doc, chapter):
             spillover_text = re.search(regex_explanation_spillover, spillover_text, re.MULTILINE)
             chapter["question_bank"][previous_result]["explanation"] += spillover_text.group()
         # -----------------------------------------------------------------------------------------
-        print(f"ANSWER PAGE: {page}")
         for answer in answer_data:
 
-            question_num = int(answer[0].replace(' ', '')) - 1
+            question_num = int(answer[0].replace(' ', ''))
 
             # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
-            if question_num != 0 and "answer" not in chapter["question_bank"][0]:
+            if question_num != 1 and "answer" not in chapter["question_bank"][1]:
                 continue
             # check if there is already an answer built for the current question then break
             elif "answer" in chapter["question_bank"][question_num]:
@@ -178,8 +178,8 @@ def pdf_processing(file_path):
         chapter["question_bank"] = extract_questions(doc, chapter)
         extract_answers(doc, chapter)
         # print(json.dumps(chapter, indent=2))
-    print(json.dumps(chapter_map, indent=2))
-    quit()
+
+    return chapter_map
     # extract image and save -- change filename to question number
     # for image in pdf_reader.pages[24].images:
     #     with open(image.name, "wb") as fp:
@@ -204,24 +204,39 @@ def nav_window():
         [sg.Listbox([], size=(60, 8), key="pdf_titles")],
         [sg.Text("Enter or select a PDF file path:")],
         [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button")],
-        [sg.Button("Process PDF")],
+        [sg.Button("Process PDF"), sg.Button("Generate Quiz")],
     ]
 
     # Create the window
     return sg.Window("PDF Reader", layout)
 
 
-def test_window():
-    pass
+def quiz_window(question_number, question, choices, answer, explanation):
+    layout = [
+        [sg.Text(f'Question {question_number}: ')],
+        [sg.Text(f"{question}")],
+    ]
+
+    for i, choice in enumerate(choices):
+        if len(answer) == 1:
+            layout.append([sg.Radio(choice[1], question_number, key=choice[0])])
+        else:
+            # TODO: fix checkboxes starting prechecked
+            layout.append([sg.Checkbox(choice[1], question_number, key=choice[0])])
+    layout.append([sg.Button("Submit")])
+
+
+    return sg.Window("Quiz", layout)
 
 
 # Main function to create and run the GUI
 def main():
     test_path = "CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test_path2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
-    pdf_processing(test_path2)
 
     nav = nav_window()
+    quiz = None
+    quiz_questions = None
     while True:
         event, values = nav.read()
 
@@ -230,12 +245,39 @@ def main():
         elif event == "Process PDF":
             file_path = values["input_path"]
             if file_path:
-                pdf_processing(file_path)
+                pdf_questions = pdf_processing(test_path2)
+                quiz_questions = list(pdf_questions[0]["question_bank"].items())[:100]
+                quiz_questions = dict(quiz_questions)
+                print(json.dumps(quiz_questions, indent=1))
+
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
+        elif event == "Generate Quiz" and not quiz:
+            current_question = 1
+            score = 0
+            if quiz_questions:
+                quiz = quiz_window(current_question, **quiz_questions[current_question])
+                while True:
+                    quiz_event, quiz_values = quiz.read()
+                    print(quiz_values)
+                    if quiz_event == sg.WINDOW_CLOSED:
+                        break
+                    if quiz_event == "Submit":
+                        selected_answer = [choice for choice, value in quiz_values.items() if value]
+                        if quiz_questions[current_question]["answer"] == selected_answer:
+                            score += 1
+                            print("Good Job!")
+                        else:
+                            print("OOP")
+            else:
+                sg.popup_error("You must load a PDF before generating a quiz")
+
+
 
     # Close the window
     nav.close()
+    if quiz:
+        quiz.close()
 
 
 if __name__ == "__main__":
