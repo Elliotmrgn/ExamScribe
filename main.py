@@ -81,13 +81,13 @@ def extract_chapter_map(doc):
 
 def extract_questions(doc, chapter):
     def choice_cleanup(unclean_choices):
-        choice_text = re.split('(^[A-Z]\. +)', unclean_choices, flags=re.MULTILINE)
+        choice_text = re.split('(^[a-zA-Z]\. +)', unclean_choices, flags=re.MULTILINE)
         choice_text = [choice.strip() for choice in choice_text if choice.strip()]
         clean_choices = [[choice_text[i][0], choice_text[i + 1]] for i in range(0, len(choice_text), 2)]
         return clean_choices
 
     # -------------------------------------------------
-    regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![A-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
+    regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
 
@@ -150,6 +150,7 @@ def extract_answers(doc, chapter):
             question_num = int(answer[0].replace(' ', ''))
 
             # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
+
             if question_num != 1 and "answer" not in chapter["question_bank"][1]:
                 continue
             # check if there is already an answer built for the current question then break
@@ -167,15 +168,21 @@ def extract_answers(doc, chapter):
                     previous_result = 0
 
 
+
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
     doc = fitz.open(file_path)
+    title = doc.metadata["title"]
+
     chapter_map = extract_chapter_map(doc)
 
     for chapter in chapter_map:
         chapter["question_bank"] = extract_questions(doc, chapter)
         extract_answers(doc, chapter)
         # print(json.dumps(chapter, indent=2))
+    print("TITLE: ", title)
+    with open(f'./bins/{title}', 'wb') as file:
+        pickle.dump(chapter_map, file)
 
     return chapter_map
     # extract image and save -- change filename to question number
@@ -191,8 +198,7 @@ def pdf_processing(file_path):
 
 
 # Function to load PDF titles and file paths from a text file
-def load_previous_pdfs():
-    pass
+
 
 
 def question_randomizer(pdf_questions, total_questions=100):
@@ -210,17 +216,22 @@ def question_randomizer(pdf_questions, total_questions=100):
     random.shuffle(chosen_questions)
     return chosen_questions
 
+def load_previous_pdfs():
+    filelist = []
+    for file in os.listdir('./bins'):
+        filelist.append(file)
+    return filelist
 
-def nav_window():
+
+def nav_window(filelist):
     # Define the layout of the GUI
     layout = [
         [sg.Text("PDF Titles:")],
-        [sg.Listbox([], size=(60, 8), key="pdf_titles")],
-        [sg.Text("Enter or select a PDF file path:")],
+        [sg.Listbox(filelist, size=(60, 8),expand_y=True, enable_events=True, key="-LIST-")],
+        [sg.Text("Select a PDF:")],
         [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button")],
-        [sg.Button("Process PDF"), sg.Button("Generate Quiz")],
+        [sg.Button(key="-ADD-", button_text="Add"), sg.Button('Remove'), sg.Button("Start")],
     ]
-
     # Create the window
     return sg.Window("PDF Reader", layout)
 
@@ -245,7 +256,8 @@ def main():
     test_path = "CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test_path2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
     sg.set_options(font=('Arial Bold', 16))
-    nav = nav_window()
+    filelist = load_previous_pdfs()
+    nav = nav_window(filelist)
     quiz = None
     quiz_questions = None
     while True:
@@ -253,10 +265,10 @@ def main():
 
         if event == sg.WINDOW_CLOSED:
             break
-        elif event == "Process PDF":
+        if event == "-ADD-":
             file_path = values["input_path"]
             if file_path:
-                pdf_questions = pdf_processing(test_path2)
+                pdf_questions = pdf_processing(file_path)
                 # print(json.dumps(pdf_questions, indent=1))
                 quiz_questions = question_randomizer(pdf_questions, 100)
                 # quiz_questions = list(pdf_questions[0]["question_bank"].items())[:100]
@@ -265,7 +277,11 @@ def main():
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
-        elif event == "Generate Quiz" and not quiz:
+            filelist = load_previous_pdfs()
+            nav['-LIST-'].update(filelist)
+        if event == "Remove":
+            pass
+        if event == "Start" and not quiz:
             current_question = 1
             score = 0
 
