@@ -128,6 +128,7 @@ def extract_answers(doc, chapter):
     for page in range(chapter["answer_start_page"], chapter["answer_end_page"]+1):
         doc_text = doc[page].get_text()
         answer_data = re.findall(regex_answers, doc_text, re.MULTILINE)
+        # -----------------------------------------------------------------------------------------
         # adds explanation spillover to previous question
         if previous_result:
             spillover_text = doc_text.split('\n')
@@ -143,17 +144,23 @@ def extract_answers(doc, chapter):
             spillover_text = '\n'.join(spillover_text)
             spillover_text = re.search(regex_explanation_spillover, spillover_text, re.MULTILINE)
             chapter["question_bank"][previous_result]["explanation"] += spillover_text.group()
+        # -----------------------------------------------------------------------------------------
 
         for answer in answer_data:
 
             question_num = int(answer[0].replace(' ', '')) - 1
-            answers_list = answer[1].split(', ')
-            chapter["question_bank"][question_num]["answer"] = answers_list
-            chapter["question_bank"][question_num]["explanation"] = answer[2]
-            if not answer[2].strip().endswith('.'):
-                previous_result = question_num
+
+            if "answers" in chapter["question_bank"][question_num]:
+                # print(json.dumps(chapter, indent=2))
+                break
             else:
-                previous_result = 0
+                answers_list = answer[1].split(', ')
+                chapter["question_bank"][question_num]["answer"] = answers_list
+                chapter["question_bank"][question_num]["explanation"] = answer[2]
+                if not answer[2].strip().endswith('.'):
+                    previous_result = question_num
+                else:
+                    previous_result = 0
 
 
 
@@ -163,9 +170,9 @@ def pdf_processing(file_path):
     regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     doc = fitz.open(file_path)
     chapter_map = extract_chapter_map(doc)
-    print(doc[384].get_text())
-    print(json.dumps(chapter_map, indent=2))
-    quit()
+    # print(doc[384].get_text())
+    # print(json.dumps(chapter_map, indent=2))
+    # quit()
     # quit()
 
     for chapter in chapter_map:
