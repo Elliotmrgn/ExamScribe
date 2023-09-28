@@ -10,7 +10,11 @@ import pickle
 import PySimpleGUI as sg
 
 
-# TODO: Image check (chapter 2, q 34)
+# TODO: Load from saved file
+# TODO: Study mode & Test Mode
+# TODO: Manual changing of questions
+# TODO: Answer and explanation popup
+# TODO: Image processing
 
 def extract_chapter_map(doc):
     toc = doc.get_toc()
@@ -168,11 +172,17 @@ def extract_answers(doc, chapter):
                     previous_result = 0
 
 
-
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
     doc = fitz.open(file_path)
     title = doc.metadata["title"]
+
+    # Check if the file already exists before overwriting
+    if os.path.exists(f'./bins/{title}'):
+        # file_exist_ans = 'OK' or 'Cancel'
+        file_exists_ans = sg.popup_ok_cancel(f"'{title}' already exists. Do you want to overwrite it?")
+        if file_exists_ans == 'Cancel':
+            return
 
     chapter_map = extract_chapter_map(doc)
 
@@ -184,21 +194,13 @@ def pdf_processing(file_path):
     with open(f'./bins/{title}', 'wb') as file:
         pickle.dump(chapter_map, file)
 
-    return chapter_map
+    # return chapter_map
     # extract image and save -- change filename to question number
     # for image in pdf_reader.pages[24].images:
     #     with open(image.name, "wb") as fp:
     #         fp.write(image.data)
 
     # Add more processing code here as needed
-
-
-# except Exception as e:
-#     sg.popup_error(f"Error: {e}")
-
-
-# Function to load PDF titles and file paths from a text file
-
 
 
 def question_randomizer(pdf_questions, total_questions=100):
@@ -216,6 +218,7 @@ def question_randomizer(pdf_questions, total_questions=100):
     random.shuffle(chosen_questions)
     return chosen_questions
 
+
 def load_previous_pdfs():
     filelist = []
     for file in os.listdir('./bins'):
@@ -224,14 +227,14 @@ def load_previous_pdfs():
 
 
 def nav_window(filelist):
-    # Define the layout of the GUI
     layout = [
         [sg.Text("PDF Titles:")],
-        [sg.Listbox(filelist, size=(60, 8),expand_y=True, enable_events=True, key="-LIST-")],
+        [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
         [sg.Text("Select a PDF:")],
         [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button")],
-        [sg.Button(key="-ADD-", button_text="Add"), sg.Button('Remove'), sg.Button("Start")],
+        [sg.Button(key="-ADD-", button_text="Add"), sg.Button('Remove'), sg.Button("Start"), sg.Button("Test")],
     ]
+    # Define the layout of the GUI
     # Create the window
     return sg.Window("PDF Reader", layout)
 
@@ -251,6 +254,21 @@ def quiz_window(question_number, question, choices, answer, explanation):
     return sg.Window("Quiz", layout)
 
 
+def settings_window(total_questions):
+    layout = [
+        [sg.Text("Quiz Type:"), sg.Radio("Test", "quiz_type", key="test", enable_events=True),
+         sg.Radio("Practice", "quiz_type", key="practice", enable_events=True)],
+        [sg.pin(
+            sg.Column([
+                [sg.Text(f"Total questions? (max {total_questions})"), sg.InputText(key="test-len", size=4, enable_events=True)]
+            ], key="test-col", pad=(0, 0), visible=False)
+        )],
+        [sg.OK()]
+    ]
+
+    return sg.Window("Settings", layout)
+
+
 # Main function to create and run the GUI
 def main():
     test_path = "CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
@@ -259,61 +277,108 @@ def main():
     filelist = load_previous_pdfs()
     nav = nav_window(filelist)
     quiz = None
+    settings = None
     quiz_questions = None
+    toggle = True
+    # Nav screen loop
     while True:
         event, values = nav.read()
-
+        # Window closed
         if event == sg.WINDOW_CLOSED:
             break
+
+        # Add new pdf
         if event == "-ADD-":
+            # TODO change the file browse to appear when add is pressed
+            # TODO change file browser to only show pdfs
             file_path = values["input_path"]
             if file_path:
-                pdf_questions = pdf_processing(file_path)
-                # print(json.dumps(pdf_questions, indent=1))
-                quiz_questions = question_randomizer(pdf_questions, 100)
+                # Extract the pdf data and create a file for use
+                pdf_processing(file_path)
+                # Reload the list elements
+                nav['-LIST-'].update(load_previous_pdfs())
+
+                # if pdf_questions:
+                #     quiz_questions = question_randomizer(pdf_questions, 100)
                 # quiz_questions = list(pdf_questions[0]["question_bank"].items())[:100]
                 # quiz_questions = dict(quiz_questions)
                 # print(json.dumps(quiz_questions, indent=1))
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
-            filelist = load_previous_pdfs()
-            nav['-LIST-'].update(filelist)
+
         if event == "Remove":
             pass
-        if event == "Start" and not quiz:
-            current_question = 1
-            score = 0
 
-            if quiz_questions:
-                while current_question < 100:
-                    quiz = quiz_window(current_question, **quiz_questions[current_question - 1])
-                    quiz_event, quiz_values = quiz.read()
-                    print(quiz_values)
-                    if quiz_event == sg.WINDOW_CLOSED:
-                        break
-                    if quiz_event == "Submit":
-                        selected_answer = [choice for choice, value in quiz_values.items() if value]
-                        print(json.dumps(quiz_questions[current_question - 1], indent=1))
-                        print(selected_answer)
-                        print(quiz_questions[current_question - 1]["answer"])
-                        if quiz_questions[current_question - 1]["answer"] == selected_answer:
-                            score += 1
-                            print("Good Job!")
-                        else:
-                            print("OOP")
-                        current_question += 1
-                        quiz.close()
+        if event == "Start":
+            # Check if there is not a generated quiz yet and
+            if not quiz and nav["-LIST-"].get():
+                try:
+                    # Get data from binary file
+                    with open(f'./bins/{nav["-LIST-"].get()[0]}', 'rb') as file:
+                        pdf_questions = pickle.load(file)
+                    total_questions = 0
+                    for chapter in pdf_questions:
+                        total_questions += len(chapter["question_bank"])
+                    settings = settings_window(total_questions)
+                    while True:
+                        settings_event, settings_values = settings.read()
+                        if settings_event == sg.WINDOW_CLOSED:
+                            break
+                        if settings_event == 'test':
+                            settings["test-col"].update(visible=True)
 
+                        if settings_event == 'test-len' and settings_values['test-len'] and settings_values['test-len'][-1] not in '0123456789':
+                            settings['test-len'].update(settings_values['test-len'][:-1])
+                        elif settings_event == 'test-len' and settings_values['test-len'] and int(settings_values['test-len']) > total_questions:
+                            settings['test-len'].update(settings_values['test-len'][:-1])
 
+                        if settings_event == 'practice':
+                            settings["test-len"].update("")
+                            settings["test-col"].update(visible=False)
+                        if settings_event == "OK" and (settings_values['test'] or settings_values['practice']):
+                            if settings_values['test']:
+                                total_questions = int(settings_values['test-len'])
 
+                    quiz_questions = question_randomizer(pdf_questions, total_questions)
+                    current_question = 1
+                    score = 0
+
+                    if quiz_questions:
+                        while current_question < total_questions:
+                            quiz = quiz_window(current_question, **quiz_questions[current_question - 1])
+                            quiz_event, quiz_values = quiz.read()
+                            print(quiz_values)
+                            if quiz_event == sg.WINDOW_CLOSED:
+                                break
+                            if quiz_event == "Submit":
+                                selected_answer = [choice for choice, value in quiz_values.items() if value]
+                                print(json.dumps(quiz_questions[current_question - 1], indent=1))
+                                print(selected_answer)
+                                print(quiz_questions[current_question - 1]["answer"])
+                                if quiz_questions[current_question - 1]["answer"] == selected_answer:
+                                    score += 1
+                                    print(f"Good Job!\n\n{quiz_questions[current_question - 1]['explanation']}")
+                                else:
+                                    print(
+                                        f"OOP\n\n{quiz_questions[current_question - 1]['question']}\n{quiz_questions[current_question - 1]['explanation']}")
+                                current_question += 1
+                                quiz.close()
+
+                # Error if the file gets removed before starting
+                except FileNotFoundError:
+                    sg.popup_error("File Not Found! Try adding it again if this error persists.")
+            elif quiz:
+                sg.popup_error("You already have a quiz generated.")
             else:
-                sg.popup_error("You must load a PDF before generating a quiz")
+                sg.popup_error("You must select a PDF before starting a quiz.")
 
     # Close the window
     nav.close()
     if quiz:
         quiz.close()
+    if settings:
+        settings.close()
 
 
 if __name__ == "__main__":
