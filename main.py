@@ -273,7 +273,7 @@ def quiz_window(question_number, current_question, quiz_type, score):
     else:
         choice_buttons = [[sg.Checkbox(choice[1], key=choice[0])] for choice in current_question['choices']]
     layout.append(choice_buttons)
-    layout.append([sg.Button("Submit")])
+    layout.append([sg.Button("Submit"), sg.Text(size=(10,1)), sg.Button("Show Data")])
     if quiz_type == 'practice' and question_number-1 > 0:
         layout.append([sg.Text(f"Score: { score } / { question_number - 1 }  -  {score/(question_number-1)*100:.2f}")])
 
@@ -380,30 +380,38 @@ def main():
 
                     current_question = 0
                     score = 0
-
+                    closed = False
                     if quiz_questions:
                         while current_question+1 < total_questions:
-                            quiz = quiz_window(current_question+1, quiz_questions[current_question], quiz_type, score)
-                            quiz_event, quiz_values = quiz.read()
-
-                            if quiz_event == sg.WINDOW_CLOSED:
+                            if closed:
+                                quiz = None
                                 break
-                            if quiz_event == "Submit":
-                                selected_answer = [choice for choice, value in quiz_values.items() if value]
-                                # print(json.dumps(quiz_questions[current_question], indent=1))
-                                # print(selected_answer)
-                                # print(quiz_questions[current_question]["answer"])
-                                if quiz_questions[current_question]["answer"] == selected_answer:
-                                    score += 1
-                                    if quiz_type == 'practice':
-                                        sg.popup_ok(f"Good Job!\n\n{quiz_questions[current_question]['explanation']}")
-                                    # print(f"Good Job!\n\n{quiz_questions[current_question]['explanation']}")
-                                elif quiz_type == 'practice':
-                                    sg.popup_ok(f"OOP!\n\n{quiz_questions[current_question]['explanation']}")
-                                    # print(
-                                    #     f"OOP\n\n{quiz_questions[current_question]['question']}\n{quiz_questions[current_question - 1]['explanation']}")
-                                current_question += 1
-                                quiz.close()
+                            while True:
+                                quiz = quiz_window(current_question+1, quiz_questions[current_question], quiz_type, score)
+                                quiz_event, quiz_values = quiz.read()
+
+                                if quiz_event == sg.WINDOW_CLOSED:
+                                    closed = True
+                                    break
+                                if quiz_event == "Show Data":
+                                    print(json.dumps(quiz_questions[current_question], indent=2))
+                                if quiz_event == "Submit":
+                                    selected_answer = [choice for choice, value in quiz_values.items() if value]
+                                    # print(json.dumps(quiz_questions[current_question], indent=1))
+                                    # print(selected_answer)
+                                    # print(quiz_questions[current_question]["answer"])
+                                    if quiz_questions[current_question]["answer"] == selected_answer:
+                                        score += 1
+                                        if quiz_type == 'practice':
+                                            sg.popup_ok(f"Good Job!\n\n{quiz_questions[current_question]['explanation']}")
+
+                                    elif quiz_type == 'practice':
+                                        sg.popup_ok(f"OOP!\n\n{quiz_questions[current_question]['explanation']}")
+                                    current_question += 1
+                                    quiz.close()
+                                    break
+
+
 
                 # Error if the file gets removed before starting
                 except FileNotFoundError:
