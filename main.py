@@ -402,8 +402,9 @@ def main():
                                     # print(quiz_questions[current_question]["answer"])
                                     if quiz_questions[current_question]["answer"] == selected_answer:
                                         score += 1
+                                        explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
                                         if quiz_type == 'practice':
-                                            sg.popup_ok(f"Good Job!\n\n{quiz_questions[current_question]['explanation']}")
+                                            sg.popup_ok(f"Good Job!\n\n{explain}")
 
                                     elif quiz_type == 'practice':
                                         sg.popup_ok(f"OOP!\n\n{quiz_questions[current_question]['explanation']}")
