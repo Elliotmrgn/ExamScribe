@@ -11,7 +11,6 @@ import pickle
 import PySimpleGUI as sg
 
 
-
 # TODO: Study mode & Test Mode
 # TODO: Manual changing of questions
 # TODO: Answer and explanation popup
@@ -174,7 +173,6 @@ def pdf_processing(file_path):
     doc = fitz.open(file_path)
     title = sanitize_file_name(doc.metadata["title"])
 
-
     # Check if the file already exists before overwriting
     if os.path.exists(f'./bins/{title}'):
         # file_exist_ans = 'OK' or 'Cancel'
@@ -185,11 +183,10 @@ def pdf_processing(file_path):
     chapter_map = extract_chapter_map(doc)
 
     for chapter_num, chapter in enumerate(chapter_map):
-        chapter["question_bank"] = extract_questions(doc, chapter, chapter_num+1)
+        chapter["question_bank"] = extract_questions(doc, chapter, chapter_num + 1)
         extract_answers(doc, chapter)
         # print(json.dumps(chapter, indent=2))
     print("TITLE: ", title)
-
 
     with open(f'./bins/{title}', 'wb') as file:
         pickle.dump(chapter_map, file)
@@ -234,7 +231,8 @@ def question_randomizer(pdf_questions, total_questions=100):
                 break
 
     for i in range(total_chapters):
-        chosen_questions[i].extend(random.sample(list(pdf_questions[i]["question_bank"].values()), questions_per_chapter[i]))
+        chosen_questions[i].extend(
+            random.sample(list(pdf_questions[i]["question_bank"].values()), questions_per_chapter[i]))
 
     chosen_questions = [question for chapter in chosen_questions for question in chapter]
     for _ in range(5):
@@ -254,9 +252,23 @@ def nav_window(filelist):
     layout = [
         [sg.Text("PDF Titles:")],
         [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
-        [sg.Text("Select a PDF:")],
-        [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button")],
-        [sg.Button(key="-ADD-", button_text="Add"), sg.Button('Remove'), sg.Button("Start"), sg.Button("Test")],
+        [sg.pin(
+            sg.Column([
+                [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button"), sg.OK(key="add-OK")]
+            ], key="add-browser", pad=(0, 0), visible=False)
+        )],
+        # [sg.Text("Select a PDF:")],
+
+        [sg.Button(key="-ADD-", button_text="Add"), sg.Button('Remove')],
+        [sg.pin(
+            sg.Column([
+                [sg.Text("Quiz Type:"), sg.Radio("Test", "quiz_type", key="test", enable_events=True),
+                 sg.Radio("Practice", "quiz_type", key="practice", enable_events=True)],
+                [sg.Text(f"Total questions? (max"), sg.Text(key="max-questions"),
+                 sg.InputText(key="quiz-len", size=5, enable_events=True)],
+                [sg.Button("Start")]
+            ], key="settings-col", pad=(0, 0), visible=False)
+        )],
     ]
     # Define the layout of the GUI
     # Create the window
@@ -269,30 +281,19 @@ def quiz_window(question_number, current_question, quiz_type, score):
         [sg.Text(f"{current_question['question']}")],
     ]
     if len(current_question['answer']) == 1:
-        choice_buttons = [[sg.Radio(choice[1], question_number, key=choice[0])] for choice in current_question['choices']]
+        choice_buttons = [[sg.Radio(choice[1], question_number, key=choice[0])] for choice in
+                          current_question['choices']]
     else:
         choice_buttons = [[sg.Checkbox(choice[1], key=choice[0])] for choice in current_question['choices']]
     layout.append(choice_buttons)
-    layout.append([sg.Button("Submit"), sg.Text(size=(10,1)), sg.Button("Show Data")])
-    if quiz_type == 'practice' and question_number-1 > 0:
-        layout.append([sg.Text(f"Score: { score } / { question_number - 1 }  -  {score/(question_number-1)*100:.2f}")])
+    layout.append([sg.Button("Submit"), sg.Text(size=(10, 1)), sg.Button("Show Data")])
+    if quiz_type == 'practice' and question_number - 1 > 0:
+        layout.append(
+            [sg.Text(f"Score: {score} / {question_number - 1}  -  {score / (question_number - 1) * 100:.2f}")])
 
     return sg.Window("Quiz", layout)
 
 
-def settings_window(total_questions):
-    layout = [
-        [sg.Text("Quiz Type:"), sg.Radio("Test", "quiz_type", key="test", enable_events=True),
-         sg.Radio("Practice", "quiz_type", key="practice", enable_events=True)],
-        [sg.pin(
-            sg.Column([
-                [sg.Text(f"Total questions? (max {total_questions})"), sg.InputText(key="test-len", size=4, enable_events=True)]
-            ], key="test-col", pad=(0, 0), visible=False)
-        )],
-        [sg.OK()]
-    ]
-
-    return sg.Window("Settings", layout)
 
 
 # Main function to create and run the GUI
@@ -309,6 +310,7 @@ def main():
     # Nav screen loop
     while True:
         event, values = nav.read()
+        print(event)
         # Window closed
         if event == sg.WINDOW_CLOSED:
             break
@@ -317,12 +319,15 @@ def main():
         if event == "-ADD-":
             # TODO change the file browse to appear when add is pressed
             # TODO change file browser to only show pdfs
+            nav['add-browser'].update(visible=True)
+        if event == 'add-OK':
             file_path = values["input_path"]
             if file_path:
                 # Extract the pdf data and create a file for use
                 pdf_processing(file_path)
                 # Reload the list elements
                 nav['-LIST-'].update(load_previous_pdfs())
+                nav['add-browser'].update(visible=False)
 
                 # if pdf_questions:
                 #     quiz_questions = question_randomizer(pdf_questions, 100)
@@ -332,62 +337,56 @@ def main():
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
+        # Select valid PDF
+        if event == '-LIST-' and nav["-LIST-"].get():
+            try:
+                # Get data from binary file
+                with open(f'./bins/{nav["-LIST-"].get()[0]}', 'rb') as file:
+                    pdf_questions = pickle.load(file)
+                # Calculate total questions in pdf
+                total_questions = 0
+                for chapter in pdf_questions:
+                    total_questions += len(chapter["question_bank"])
+                nav["max-questions"].update(f"{total_questions} )")
+                nav["settings-col"].update(visible=True)
+            # Error if the file doesn't exist
+            except FileNotFoundError:
+                sg.popup_error("File Not Found! Try adding it again if this error persists.")
+
+        # Typing quiz length validation
+        if event == 'quiz-len' and values['quiz-len'] and values['quiz-len'][-1] not in '0123456789':
+            nav['quiz-len'].update(values['quiz-len'][:-1])
+        elif event == 'quiz-len' and values['quiz-len'] and int(values['quiz-len']) > total_questions:
+            nav['quiz-len'].update(values['quiz-len'][:-1])
 
         if event == "Remove":
             pass
 
+        # Start Quiz
+
         if event == "Start":
-            # Check if there is not a generated quiz yet and
-            if not quiz and nav["-LIST-"].get():
-                try:
-                    # Get data from binary file
-                    with open(f'./bins/{nav["-LIST-"].get()[0]}', 'rb') as file:
-                        pdf_questions = pickle.load(file)
-                    # Calculate total questions in pdf
-                    total_questions = 0
-                    for chapter in pdf_questions:
-                        total_questions += len(chapter["question_bank"])
-                    quiz_type = ""
-                    # SETTINGS WINDOW LOOP ---------------------------------------------------------------------
-                    settings = settings_window(total_questions)
-                    while True:
-                        settings_event, settings_values = settings.read()
-                        if settings_event == sg.WINDOW_CLOSED:
-                            break
-                        if settings_event == 'test':
-                            settings["test-col"].update(visible=True)
+            print(values)
+            if values['quiz-len'] and values['test'] or values['practice']:
+                if not quiz and pdf_questions:
+                    if values['test']:
+                        quiz_type = 'test'
+                    elif values['practice']:
+                        quiz_type = 'practice'
 
-                        if settings_event == 'test-len' and settings_values['test-len'] and settings_values['test-len'][-1] not in '0123456789':
-                            settings['test-len'].update(settings_values['test-len'][:-1])
-                        elif settings_event == 'test-len' and settings_values['test-len'] and int(settings_values['test-len']) > total_questions:
-                            settings['test-len'].update(settings_values['test-len'][:-1])
-
-                        if settings_event == 'practice':
-                            settings["test-len"].update("")
-                            settings["test-col"].update(visible=False)
-                        if settings_event == "OK" and (settings_values['test'] or settings_values['practice']):
-                            if settings_values['test']:
-                                quiz_type = 'test'
-                                total_questions = int(settings_values['test-len'])
-                            else:
-                                quiz_type = 'practice'
-                            break
-                    settings.close()
-                    # --------------------------------------------------------------------------------------------
-
-                    # Randomize questions to be answered
+                    total_questions = int(values['quiz-len'])
                     quiz_questions = question_randomizer(pdf_questions, total_questions)
-
                     current_question = 0
                     score = 0
                     closed = False
+
                     if quiz_questions:
-                        while current_question+1 < total_questions:
+                        while current_question + 1 < total_questions:
                             if closed:
                                 quiz = None
                                 break
                             while True:
-                                quiz = quiz_window(current_question+1, quiz_questions[current_question], quiz_type, score)
+                                quiz = quiz_window(current_question + 1, quiz_questions[current_question], quiz_type,
+                                                   score)
                                 quiz_event, quiz_values = quiz.read()
 
                                 if quiz_event == sg.WINDOW_CLOSED:
@@ -403,24 +402,17 @@ def main():
                                     if quiz_questions[current_question]["answer"] == selected_answer:
                                         score += 1
                                         explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
-                                        if quiz_type == 'practice':
+                                        if values['practice']:
                                             sg.popup_ok(f"Good Job!\n\n{explain}")
 
-                                    elif quiz_type == 'practice':
+                                    elif values['practice']:
                                         sg.popup_ok(f"OOP!\n\n{quiz_questions[current_question]['explanation']}")
                                     current_question += 1
                                     quiz.close()
                                     break
 
-
-
-                # Error if the file gets removed before starting
-                except FileNotFoundError:
-                    sg.popup_error("File Not Found! Try adding it again if this error persists.")
-            elif quiz:
-                sg.popup_error("You already have a quiz generated.")
             else:
-                sg.popup_error("You must select a PDF before starting a quiz.")
+                sg.popup_ok("Select quiz type and length before beginning")
 
     # Close the window
     nav.close()
