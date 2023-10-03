@@ -4,7 +4,7 @@ import random
 import re
 import string
 
-import pypdf
+
 import fitz
 import pickle
 
