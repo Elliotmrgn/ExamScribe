@@ -69,6 +69,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-If you have any questions or suggestions regarding ExamScribe, please contact us at examscribe@example.com.
+If you have any questions or suggestions regarding ExamScribe, please contact me at elliotmrgn@gmail.com.
 
 Happy studying and practicing with ExamScribe!
