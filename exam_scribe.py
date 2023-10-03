@@ -11,10 +11,8 @@ import pickle
 import PySimpleGUI as sg
 
 
-# TODO: Study mode & Test Mode
-# TODO: Manual changing of questions
-# TODO: Answer and explanation popup
-# TODO: Image processing
+# TODO: Manual editing of questions
+# TODO: Image processing or manual adding
 
 def extract_chapter_map(doc):
     toc = doc.get_toc()
@@ -180,24 +178,17 @@ def pdf_processing(file_path):
         if file_exists_ans == 'Cancel':
             return
 
+    # processes the mapping of chapters
     chapter_map = extract_chapter_map(doc)
 
+    # extract all questions and answers for each chapter
     for chapter_num, chapter in enumerate(chapter_map):
         chapter["question_bank"] = extract_questions(doc, chapter, chapter_num + 1)
         extract_answers(doc, chapter)
-        # print(json.dumps(chapter, indent=2))
-    print("TITLE: ", title)
 
+    # save the data to a binary file for later use
     with open(f'./bins/{title}', 'wb') as file:
         pickle.dump(chapter_map, file)
-
-    # return chapter_map
-    # extract image and save -- change filename to question number
-    # for image in pdf_reader.pages[24].images:
-    #     with open(image.name, "wb") as fp:
-    #         fp.write(image.data)
-
-    # Add more processing code here as needed
 
 
 def sanitize_file_name(file_name):
@@ -218,6 +209,7 @@ def sanitize_file_name(file_name):
 
 
 def question_randomizer(pdf_questions, total_questions=100):
+    # Choose which questions will be on the test and radomize their order
     total_chapters = len(pdf_questions)
     questions_per_chapter = [0 for _ in range(total_chapters)]
     chosen_questions = [[] for _ in range(total_chapters)]
@@ -249,6 +241,7 @@ def load_previous_pdfs():
 
 
 def nav_window(filelist):
+    # starting window to add, remove, or select quiz
     layout = [
         [sg.Text("PDF Titles:")],
         [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
@@ -276,6 +269,7 @@ def nav_window(filelist):
 
 
 def quiz_window(question_number, current_question, quiz_type, score):
+    # generates quiz window and dynamically adds choices
     layout = [
         [sg.Text(f'Question {question_number}: ')],
         [sg.Text(f"{current_question['question']}")],
@@ -296,10 +290,9 @@ def quiz_window(question_number, current_question, quiz_type, score):
 
 
 
-# Main function to create and run the GUI
 def main():
-    test_path = "CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
-    test_path2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
+    # Main function to create and run the GUI
+
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
     nav = nav_window(filelist)
@@ -307,6 +300,7 @@ def main():
     settings = None
     quiz_questions = None
     toggle = True
+
     # Nav screen loop
     while True:
         event, values = nav.read()
@@ -328,12 +322,6 @@ def main():
                 # Reload the list elements
                 nav['-LIST-'].update(load_previous_pdfs())
                 nav['add-browser'].update(visible=False)
-
-                # if pdf_questions:
-                #     quiz_questions = question_randomizer(pdf_questions, 100)
-                # quiz_questions = list(pdf_questions[0]["question_bank"].items())[:100]
-                # quiz_questions = dict(quiz_questions)
-                # print(json.dumps(quiz_questions, indent=1))
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
@@ -396,9 +384,7 @@ def main():
                                     print(json.dumps(quiz_questions[current_question], indent=2))
                                 if quiz_event == "Submit":
                                     selected_answer = [choice for choice, value in quiz_values.items() if value]
-                                    # print(json.dumps(quiz_questions[current_question], indent=1))
-                                    # print(selected_answer)
-                                    # print(quiz_questions[current_question]["answer"])
+
                                     if quiz_questions[current_question]["answer"] == selected_answer:
                                         score += 1
                                         explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
@@ -418,8 +404,6 @@ def main():
     nav.close()
     if quiz:
         quiz.close()
-    if settings:
-        settings.close()
 
 
 if __name__ == "__main__":
