@@ -4,7 +4,6 @@ import random
 import re
 import string
 
-
 import fitz
 import pickle
 
@@ -21,19 +20,29 @@ def extract_chapter_map(doc):
     for i, chapter in enumerate(toc):
         if chapter[0] == 1 and chapter[1].startswith("Chapter "):
             regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
+            regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
             start_page_check = chapter[2] - 1
             end_page_check = toc[i + 1][2] - 2
             total_questions = 0
+            spillover_case = False
             while True:
                 # Goes through pages to see if they have questions to find real start and end page
                 if re.findall(regex_question_and_choices, doc[start_page_check].get_text(), re.MULTILINE):
                     # Once start page is found checks for end page
                     last_page_text = re.findall(regex_question_and_choices, doc[end_page_check].get_text(),
                                                 re.MULTILINE)
+                    last_page_spillover_case = re.findall(regex_choice_spillover, doc[end_page_check].get_text(),
+                                                re.MULTILINE)
                     if last_page_text:
                         regex_question_num = r"^\d[\d\s]*(?=\.\s)"
                         total_questions = int(re.findall(regex_question_num, last_page_text[-1], re.MULTILINE)[0])
+                        if spillover_case:
+                            end_page_check += 1
                         break
+                    elif last_page_spillover_case and not last_page_text:
+                        # Check if there is a page at the end that is just choices
+                        spillover_case = True
+                        end_page_check -= 1
                     else:
                         end_page_check -= 1
                         if end_page_check <= start_page_check:  # incase it checks all chapter pages and nothing found
@@ -89,11 +98,34 @@ def extract_questions(doc, chapter, chapter_num):
 
     # -------------------------------------------------
     regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
+    regex_question_num = r"^(\d[\d' ']*)"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
 
+    cnt = 0
+    test_pages = ""
     for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
+        print(f'START: {chapter["question_start_page"]}, END: {chapter["question_end_page"]}')
+        print(doc[152].get_text())
+        quit()
+        print(json.dumps(doc[x]))
         doc_text = doc[x].get_text()
+
+
+
+        if re.match(regex_question_num, doc_text):
+            print(f"\nMATCH!!\n")
+            print("*********************************")
+            print(test_pages)
+            print("*********************************")
+            cnt += 1
+            test_pages = ""
+
+        if cnt == 2:
+            quit()
+
+
+        test_pages += doc_text
         page_questions = re.findall(regex_question_and_choices, doc_text, re.MULTILINE)
         spillover_check = re.findall(regex_choice_spillover, doc_text, re.MULTILINE)
 
@@ -125,6 +157,7 @@ def extract_answers(doc, chapter):
 
     for page in range(chapter["answer_start_page"], chapter["answer_end_page"] + 1):
         doc_text = doc[page].get_text()
+
         answer_data = re.findall(regex_answers, doc_text, re.MULTILINE)
         # -----------------------------------------------------------------------------------------
         # adds explanation spillover to previous question
@@ -148,7 +181,7 @@ def extract_answers(doc, chapter):
             question_num = int(answer[0].replace(' ', ''))
 
             # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
-
+            print(json.dumps(chapter, indent=2))
             if question_num != 1 and "answer" not in chapter["question_bank"][1]:
                 continue
             # check if there is already an answer built for the current question then break
@@ -247,7 +280,7 @@ def nav_window(filelist):
         [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
         [sg.pin(
             sg.Column([
-                [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button"), sg.OK(key="add-OK")]
+                [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button", file_types=(("PDF files", "*.pdf"),)), sg.OK(key="add-OK")]
             ], key="add-browser", pad=(0, 0), visible=False)
         )],
         # [sg.Text("Select a PDF:")],
@@ -288,8 +321,6 @@ def quiz_window(question_number, current_question, quiz_type, score):
     return sg.Window("Quiz", layout)
 
 
-
-
 def main():
     # Main function to create and run the GUI
 
@@ -311,7 +342,7 @@ def main():
 
         # Add new pdf
         if event == "-ADD-":
-            # TODO change the file browse to appear when add is pressed
+
             # TODO change file browser to only show pdfs
             nav['add-browser'].update(visible=True)
         if event == 'add-OK':
