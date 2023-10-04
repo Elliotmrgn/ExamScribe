@@ -105,46 +105,52 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
     cnt = 0
     i = 0
-    test_pages = ""
+    multi_page = ""
     # for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
     while page_number <= chapter["question_end_page"]:
         # print(doc[page_number].get_text())
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
-        if re.match(regex_question_num, doc_text) and page_number != chapter["question_start_page"]:
-            print(f"\nMATCH!!\n")
-            print("*********************************")
-            print(test_pages)
-            print("*********************************")
-            cnt += 1
-            test_pages = ""
 
-        if cnt == 2:
-            quit()
+        if (re.match(regex_question_num, doc_text) and page_number != chapter["question_start_page"]) or page_number == chapter["question_end_page"]:
+            if page_number == chapter["question_end_page"]:
+                multi_page += f"\n{doc_text}"
 
-        test_pages += doc_text
+            # print(f"\nMATCH!!\n")
+            # print("*********************************")
+            # print(multi_page)
+            # print("*********************************")
+            # cnt += 1
+
+            # Finds all questions and splits into 3 groups: [0] is question number, [1] is question text and [2] is choices
+            page_questions = re.findall(regex_question_and_choices, multi_page, re.MULTILINE)
+
+            # spillover_check = re.findall(regex_choice_spillover, multi_page, re.MULTILINE)
+
+            # Checks if there's more sets of choices than questions. If so it adds to last question
+            # if len(spillover_check) > len(page_questions):
+            #     clean_spilled_choices = choice_cleanup(spillover_check[0])
+            #     # print(json.dumps(question_bank, indent=2))
+            #     last_question = len(question_bank)
+            #     question_bank[last_question]["choices"] += clean_spilled_choices
+            for question in page_questions:
+                # Choices come out with lots of new lines, this cleans them up and matches them together
+
+                question_num = int(question[0])
+                choices = choice_cleanup(question[2].strip())
+                question_bank[question_num] = {
+                    "question_num": question_num,
+                    "question": question[1].strip(),
+                    "choices": choices,
+                    "chapter_number": chapter_num
+                }
+
+            multi_page = ""
+
+        multi_page += f"\n{doc_text}"
         page_number += 1
-        page_questions = re.findall(regex_question_and_choices, doc_text, re.MULTILINE)
-        spillover_check = re.findall(regex_choice_spillover, doc_text, re.MULTILINE)
-
-        # Checks if there's more sets of choices than questions. If so it adds to last question
-        if len(spillover_check) > len(page_questions):
-            clean_spilled_choices = choice_cleanup(spillover_check[0])
-            # print(json.dumps(question_bank, indent=2))
-            last_question = len(question_bank)
-            question_bank[last_question]["choices"] += clean_spilled_choices
-        for question in page_questions:
-            # Choices come out with lots of new lines, this cleans them up and matches them together
-
-            choices = choice_cleanup(question[2].strip())
-            question_num = int(question[0])
-            question_bank[question_num] = {
-                "question_num": question_num,
-                "question": question[1].strip(),
-                "choices": choices,
-                "chapter_number": chapter_num
-            }
-
+    print(json.dumps(question_bank, indent=2))
+    quit()
     return question_bank
 
 
@@ -326,7 +332,7 @@ def main():
     # Main function to create and run the GUI
     test1 = "./CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
-    pdf_processing(test2)
+    pdf_processing(test1)
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
     nav = nav_window(filelist)
