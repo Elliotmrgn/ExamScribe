@@ -85,12 +85,13 @@ def extract_chapter_map(doc):
                 # if it does, it should be a page before
                 chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 1
             answer_match += 1
-
+    print(json.dumps(chapter_map, indent=2))
     return chapter_map
 
 
 def extract_questions(doc, chapter, chapter_num, page_text_rect):
     def choice_cleanup(unclean_choices):
+        # Choices come out with lots of new lines, this cleans them up and matches them together
         choice_text = re.split('(^[a-zA-Z]\. +)', unclean_choices, flags=re.MULTILINE)
         choice_text = [choice.strip() for choice in choice_text if choice.strip()]
         clean_choices = [[choice_text[i][0], choice_text[i + 1]] for i in range(0, len(choice_text), 2)]
@@ -98,13 +99,11 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
     # -------------------------------------------------
     regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
-    regex_question_num = r"^(\d[\d' ']*)"
+    regex_question_num = r"^\d[\d' ']*\.\s"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
     page_number = chapter["question_start_page"]
 
-    cnt = 0
-    i = 0
     multi_page = ""
     # for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
     while page_number <= chapter["question_end_page"]:
@@ -116,26 +115,10 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
             if page_number == chapter["question_end_page"]:
                 multi_page += f"\n{doc_text}"
 
-            # print(f"\nMATCH!!\n")
-            # print("*********************************")
-            # print(multi_page)
-            # print("*********************************")
-            # cnt += 1
-
-            # Finds all questions and splits into 3 groups: [0] is question number, [1] is question text and [2] is choices
+            # Splits questions into 3 groups: [0] is question number, [1] is question text and [2] is choices
             page_questions = re.findall(regex_question_and_choices, multi_page, re.MULTILINE)
 
-            # spillover_check = re.findall(regex_choice_spillover, multi_page, re.MULTILINE)
-
-            # Checks if there's more sets of choices than questions. If so it adds to last question
-            # if len(spillover_check) > len(page_questions):
-            #     clean_spilled_choices = choice_cleanup(spillover_check[0])
-            #     # print(json.dumps(question_bank, indent=2))
-            #     last_question = len(question_bank)
-            #     question_bank[last_question]["choices"] += clean_spilled_choices
             for question in page_questions:
-                # Choices come out with lots of new lines, this cleans them up and matches them together
-
                 question_num = int(question[0])
                 choices = choice_cleanup(question[2].strip())
                 question_bank[question_num] = {
@@ -149,58 +132,60 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
         multi_page += f"\n{doc_text}"
         page_number += 1
-    print(json.dumps(question_bank, indent=2))
-    quit()
+
     return question_bank
 
 
-def extract_answers(doc, chapter):
+def extract_answers(doc, chapter, page_text_rect):
     regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
+    regex_answer_num = r"^\d[\d' ']*\.\s[A-Z]"
     regex_explanation_spillover = r"^(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     previous_result = 0
+    multi_page = ""
+    page_number = chapter["answer_start_page"]
 
-    for page in range(chapter["answer_start_page"], chapter["answer_end_page"] + 1):
-        doc_text = doc[page].get_text()
+    # for page in range(chapter["answer_start_page"], chapter["answer_end_page"] + 1):
+    while page_number <= chapter["answer_end_page"]:
 
-        answer_data = re.findall(regex_answers, doc_text, re.MULTILINE)
-        # -----------------------------------------------------------------------------------------
-        # adds explanation spillover to previous question
-        if previous_result:
-            spillover_text = doc_text.split('\n')
-            # checks if the page starts with a page number or chapter header to ignore
-            if spillover_text[0].strip().isdigit():
-                if "Chapter" in spillover_text[1] or "Answer" in spillover_text[1]:
-                    spillover_text = spillover_text[2:]
-            elif spillover_text[1].strip().isdigit():
-                spillover_text = spillover_text[2:]
-            elif "Chapter" in spillover_text[0] or "Answer" in spillover_text[0]:
-                spillover_text = spillover_text[1:]
+        doc_text = doc[page_number].get_textbox(page_text_rect)
 
-            spillover_text = '\n'.join(spillover_text)
-            spillover_text = re.search(regex_explanation_spillover, spillover_text, re.MULTILINE)
-            chapter["question_bank"][previous_result]["explanation"] += spillover_text.group()
-        # -----------------------------------------------------------------------------------------
-        for answer in answer_data:
+        if (re.match(regex_answer_num, doc_text) and page_number != chapter["answer_start_page"]) or page_number == chapter["answer_end_page"]:
+            if page_number == chapter["answer_end_page"]:
+                # Checks if the next chapters answers start on the same page
+                if f"Chapter {chapter['number'] + 1}" in doc_text:
+                    lines = doc_text.split('\n')
+                    for i, line in enumerate(lines):
+                        if line.strip().startswith(f"Chapter {chapter['number'] + 1}"):
+                            # Keeps only text from current chapter
+                            doc_text = '\n'.join(lines[:i])
+                            break
+                multi_page += f"\n{doc_text}"
 
-            question_num = int(answer[0].replace(' ', ''))
+            answer_data = re.findall(regex_answers, multi_page, re.MULTILINE)
 
-            # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
-            print(json.dumps(chapter, indent=2))
-            if question_num != 1 and "answer" not in chapter["question_bank"][1]:
-                continue
-            # check if there is already an answer built for the current question then break
-            elif "answer" in chapter["question_bank"][question_num]:
-                # print(json.dumps(chapter, indent=2))
-                break
-            # otherwise build the answer
-            else:
-                answers_list = answer[1].split(', ')
-                chapter["question_bank"][question_num]["answer"] = answers_list
-                chapter["question_bank"][question_num]["explanation"] = answer[2]
-                if not answer[2].strip().endswith('.'):
-                    previous_result = question_num
+            for answer in answer_data:
+
+                question_num = int(answer[0].replace(' ', ''))
+
+                # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
+                if question_num != 1 and "answer" not in chapter["question_bank"][1]:
+                    continue
+                # check if there is already an answer built for the current question then break
+                elif "answer" in chapter["question_bank"][question_num]:
+                    # print(json.dumps(chapter, indent=2))
+                    break
+                # otherwise build the answer
                 else:
-                    previous_result = 0
+                    answers_list = answer[1].split(', ')
+                    chapter["question_bank"][question_num]["answer"] = answers_list
+                    chapter["question_bank"][question_num]["explanation"] = answer[2]
+
+            multi_page = ""
+
+        multi_page += f"\n{doc_text}"
+        page_number += 1
+    # print(json.dumps(chapter, indent=2))
+    # quit()
 
 
 # Function to open and process the selected PDF file
@@ -332,7 +317,7 @@ def main():
     # Main function to create and run the GUI
     test1 = "./CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
-    pdf_processing(test1)
+    pdf_processing(test2)
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
     nav = nav_window(filelist)
