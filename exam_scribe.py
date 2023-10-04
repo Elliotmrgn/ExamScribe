@@ -89,7 +89,7 @@ def extract_chapter_map(doc):
     return chapter_map
 
 
-def extract_questions(doc, chapter, chapter_num):
+def extract_questions(doc, chapter, chapter_num, page_text_rect):
     def choice_cleanup(unclean_choices):
         choice_text = re.split('(^[a-zA-Z]\. +)', unclean_choices, flags=re.MULTILINE)
         choice_text = [choice.strip() for choice in choice_text if choice.strip()]
@@ -101,19 +101,17 @@ def extract_questions(doc, chapter, chapter_num):
     regex_question_num = r"^(\d[\d' ']*)"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
+    page_number = chapter["question_start_page"]
 
     cnt = 0
+    i = 0
     test_pages = ""
-    for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
-        print(f'START: {chapter["question_start_page"]}, END: {chapter["question_end_page"]}')
-        print(doc[152].get_text())
-        quit()
-        print(json.dumps(doc[x]))
-        doc_text = doc[x].get_text()
+    # for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
+    while page_number <= chapter["question_end_page"]:
+        # print(doc[page_number].get_text())
 
-
-
-        if re.match(regex_question_num, doc_text):
+        doc_text = doc[page_number].get_textbox(page_text_rect)
+        if re.match(regex_question_num, doc_text) and page_number != chapter["question_start_page"]:
             print(f"\nMATCH!!\n")
             print("*********************************")
             print(test_pages)
@@ -124,8 +122,8 @@ def extract_questions(doc, chapter, chapter_num):
         if cnt == 2:
             quit()
 
-
         test_pages += doc_text
+        page_number += 1
         page_questions = re.findall(regex_question_and_choices, doc_text, re.MULTILINE)
         spillover_check = re.findall(regex_choice_spillover, doc_text, re.MULTILINE)
 
@@ -214,10 +212,13 @@ def pdf_processing(file_path):
     # processes the mapping of chapters
     chapter_map = extract_chapter_map(doc)
 
+    # create rect to remove header
+    page_text_rect = (0, 60, doc[0].rect.width, doc[0].rect.height)
+
     # extract all questions and answers for each chapter
     for chapter_num, chapter in enumerate(chapter_map):
-        chapter["question_bank"] = extract_questions(doc, chapter, chapter_num + 1)
-        extract_answers(doc, chapter)
+        chapter["question_bank"] = extract_questions(doc, chapter, chapter_num + 1, page_text_rect)
+        extract_answers(doc, chapter, page_text_rect)
 
     # save the data to a binary file for later use
     with open(f'./bins/{title}', 'wb') as file:
@@ -323,7 +324,9 @@ def quiz_window(question_number, current_question, quiz_type, score):
 
 def main():
     # Main function to create and run the GUI
-
+    test1 = "./CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
+    test2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
+    pdf_processing(test2)
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
     nav = nav_window(filelist)
