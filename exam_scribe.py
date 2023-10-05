@@ -98,7 +98,7 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
         return clean_choices
 
     # -------------------------------------------------
-    regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
+    regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d' ']*\.\s)[^\n]*|)*)"
     regex_question_num = r"^\d[\d' ']*\.\s"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
@@ -107,7 +107,6 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
     multi_page = ""
     # for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
     while page_number <= chapter["question_end_page"]:
-        # print(doc[page_number].get_text())
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
 
@@ -184,8 +183,6 @@ def extract_answers(doc, chapter, page_text_rect):
 
         multi_page += f"\n{doc_text}"
         page_number += 1
-    # print(json.dumps(chapter, indent=2))
-    # quit()
 
 
 # Function to open and process the selected PDF file
@@ -318,6 +315,7 @@ def main():
     test1 = "./CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
     pdf_processing(test2)
+
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
     nav = nav_window(filelist)
