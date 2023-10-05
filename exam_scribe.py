@@ -314,7 +314,6 @@ def main():
     # Main function to create and run the GUI
     test1 = "./CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
     test2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
-    pdf_processing(test2)
 
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
