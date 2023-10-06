@@ -32,7 +32,7 @@ def extract_chapter_map(doc):
                     last_page_text = re.findall(regex_question_and_choices, doc[end_page_check].get_text(),
                                                 re.MULTILINE)
                     last_page_spillover_case = re.findall(regex_choice_spillover, doc[end_page_check].get_text(),
-                                                re.MULTILINE)
+                                                          re.MULTILINE)
                     if last_page_text:
                         regex_question_num = r"^\d[\d\s]*(?=\.\s)"
                         total_questions = int(re.findall(regex_question_num, last_page_text[-1], re.MULTILINE)[0])
@@ -110,7 +110,8 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
 
-        if (re.match(regex_question_num, doc_text) and page_number != chapter["question_start_page"]) or page_number == chapter["question_end_page"]:
+        if (re.match(regex_question_num, doc_text) and page_number != chapter["question_start_page"]) or page_number == \
+                chapter["question_end_page"]:
             if page_number == chapter["question_end_page"]:
                 multi_page += f"\n{doc_text}"
 
@@ -148,7 +149,8 @@ def extract_answers(doc, chapter, page_text_rect):
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
 
-        if (re.match(regex_answer_num, doc_text) and page_number != chapter["answer_start_page"]) or page_number == chapter["answer_end_page"]:
+        if (re.match(regex_answer_num, doc_text) and page_number != chapter["answer_start_page"]) or page_number == \
+                chapter["answer_end_page"]:
             if page_number == chapter["answer_end_page"]:
                 # Checks if the next chapters answers start on the same page
                 if f"Chapter {chapter['number'] + 1}" in doc_text:
@@ -269,7 +271,9 @@ def nav_window(filelist):
         [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
         [sg.pin(
             sg.Column([
-                [sg.InputText(key="input_path"), sg.FileBrowse("Browse", key="browse_button", file_types=(("PDF files", "*.pdf"),)), sg.OK(key="add-OK")]
+                [sg.InputText(key="input_path"),
+                 sg.FileBrowse("Browse", key="browse_button", file_types=(("PDF files", "*.pdf"),)),
+                 sg.OK(key="add-OK")]
             ], key="add-browser", pad=(0, 0), visible=False)
         )],
         # [sg.Text("Select a PDF:")],
@@ -312,8 +316,6 @@ def quiz_window(question_number, current_question, quiz_type, score):
 
 def main():
     # Main function to create and run the GUI
-    test1 = "./CompTIA CySA_ Practice Tests_ Exam CS0-002 - Mike Chapple & David Seidl.pdf"
-    test2 = "../../Network plus/Practice Test Generator/CompTIA Network+ Practice Tests.pdf"
 
     sg.set_options(font=('Arial Bold', 16))
     filelist = load_previous_pdfs()
@@ -333,7 +335,6 @@ def main():
 
         # Add new pdf
         if event == "-ADD-":
-
             # TODO change file browser to only show pdfs
             nav['add-browser'].update(visible=True)
         if event == 'add-OK':
@@ -343,7 +344,9 @@ def main():
                 pdf_processing(file_path)
                 # Reload the list elements
                 nav['-LIST-'].update(load_previous_pdfs())
+
                 nav['add-browser'].update(visible=False)
+                nav['input_path'].update('')
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
@@ -352,7 +355,11 @@ def main():
             try:
                 # Get data from binary file
                 with open(f'./bins/{nav["-LIST-"].get()[0]}', 'rb') as file:
-                    pdf_questions = pickle.load(file)
+                    try:
+                        pdf_questions = pickle.load(file)
+                    except EOFError:
+                        sg.popup_error("Error! Data is corrupted")
+                        continue
                 # Calculate total questions in pdf
                 total_questions = 0
                 for chapter in pdf_questions:
@@ -363,14 +370,29 @@ def main():
             except FileNotFoundError:
                 sg.popup_error("File Not Found! Try adding it again if this error persists.")
 
-        # Typing quiz length validation
-        if event == 'quiz-len' and values['quiz-len'] and values['quiz-len'][-1] not in '0123456789':
-            nav['quiz-len'].update(values['quiz-len'][:-1])
-        elif event == 'quiz-len' and values['quiz-len'] and int(values['quiz-len']) > total_questions:
-            nav['quiz-len'].update(values['quiz-len'][:-1])
+        # Quiz length input validation
+        if event == 'quiz-len':
+            if values['quiz-len'] and values['quiz-len'][-1] not in '0123456789':
+                nav['quiz-len'].update(values['quiz-len'][:-1])
+            elif values['quiz-len'] and int(values['quiz-len']) > total_questions:
+                nav['quiz-len'].update(values['quiz-len'][:-1])
 
+        # Remove Button
         if event == "Remove":
-            pass
+            # Ensure a pdf has been selected
+            if nav["-LIST-"].get():
+                del_validate = sg.popup_ok_cancel('Are you sure you want to delete this pdf data?')
+                if del_validate == "OK":
+                    try:
+                        # Remove pdf binary
+                        os.remove(f'./bins/{nav["-LIST-"].get()[0]}')
+                        nav['-LIST-'].update(load_previous_pdfs())
+                        nav['settings-col'].update(visible=False)
+
+                    except FileNotFoundError:
+                        sg.popup_error("Something went wrong")
+            else:
+                sg.popup_ok("Please select a PDF to remove")
 
         # Start Quiz
 
