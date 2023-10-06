@@ -9,7 +9,7 @@ import pickle
 
 import PySimpleGUI as sg
 
-
+# TODO: Show details of test results 
 # TODO: Manual editing of questions
 # TODO: Image processing or manual adding
 
@@ -460,11 +460,12 @@ def main():
                                     quiz.close()
                                     break
                         else:
+                            quiz = None
                             if values['test']:
-                                sg.popup_ok("FINAL SCORE:")
+                                sg.popup_ok(f"Final Score: {score} / {quiz_total_questions}  -  {score / (quiz_total_questions) * 100:.2f}")
 
-            # else:
-            #     sg.popup_ok("Select quiz type and length before beginning")
+            else:
+                sg.popup_ok("Select quiz type and length before beginning")
 
     # Close the window
     nav.close()
