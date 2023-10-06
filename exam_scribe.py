@@ -233,7 +233,7 @@ def sanitize_file_name(file_name):
 
 
 def question_randomizer(pdf_questions, total_questions=100):
-    # Choose which questions will be on the test and radomize their order
+    # Choose which questions will be on the test and randomize their order
     total_chapters = len(pdf_questions)
     questions_per_chapter = [0 for _ in range(total_chapters)]
     chosen_questions = [[] for _ in range(total_chapters)]
@@ -247,12 +247,18 @@ def question_randomizer(pdf_questions, total_questions=100):
                 break
 
     for i in range(total_chapters):
-        chosen_questions[i].extend(
-            random.sample(list(pdf_questions[i]["question_bank"].values()), questions_per_chapter[i]))
+        if questions_per_chapter[i]:
+            chosen_questions[i].extend(
+                random.sample(list(pdf_questions[i]["question_bank"].values()), questions_per_chapter[i]))
 
+    # flattens list to be randomized
     chosen_questions = [question for chapter in chosen_questions for question in chapter]
+
+    # Randomize 5 times
     for _ in range(5):
         random.shuffle(chosen_questions)
+
+    print("!!!!!!", len(chosen_questions))
 
     return chosen_questions
 
@@ -306,7 +312,7 @@ def quiz_window(question_number, current_question, quiz_type, score):
     else:
         choice_buttons = [[sg.Checkbox(choice[1], key=choice[0])] for choice in current_question['choices']]
     layout.append(choice_buttons)
-    layout.append([sg.Button("Submit"), sg.Text(size=(10, 1)), sg.Button("Show Data")])
+    layout.append([sg.Button("Submit"), sg.Text(size=(10, 1))])
     if quiz_type == 'practice' and question_number - 1 > 0:
         layout.append(
             [sg.Text(f"Score: {score} / {question_number - 1}  -  {score / (question_number - 1) * 100:.2f}")])
@@ -335,7 +341,6 @@ def main():
 
         # Add new pdf
         if event == "-ADD-":
-            # TODO change file browser to only show pdfs
             nav['add-browser'].update(visible=True)
         if event == 'add-OK':
             file_path = values["input_path"]
@@ -398,51 +403,68 @@ def main():
 
         if event == "Start":
             print(values)
+            # Check that everything is entered to begin the quiz
             if values['quiz-len'] and values['test'] or values['practice']:
                 if not quiz and pdf_questions:
+
+                    # Set quiz type
                     if values['test']:
                         quiz_type = 'test'
                     elif values['practice']:
                         quiz_type = 'practice'
 
-                    total_questions = int(values['quiz-len'])
-                    quiz_questions = question_randomizer(pdf_questions, total_questions)
+                    # Set quiz length
+                    quiz_total_questions = int(values['quiz-len'])
+
+                    # Choose and randomize the questions that will be used
+                    quiz_questions = question_randomizer(pdf_questions, quiz_total_questions)
+
                     current_question = 0
                     score = 0
                     closed = False
 
                     if quiz_questions:
-                        while current_question + 1 < total_questions:
+                        while current_question + 1 <= quiz_total_questions:
+                            # Break on close
                             if closed:
                                 quiz = None
                                 break
+
                             while True:
+                                # Build quiz window everytime a question is submitted
                                 quiz = quiz_window(current_question + 1, quiz_questions[current_question], quiz_type,
                                                    score)
                                 quiz_event, quiz_values = quiz.read()
 
+                                # Break on close
                                 if quiz_event == sg.WINDOW_CLOSED:
                                     closed = True
                                     break
-                                if quiz_event == "Show Data":
-                                    print(json.dumps(quiz_questions[current_question], indent=2))
+
+                                # Question Submission
                                 if quiz_event == "Submit":
                                     selected_answer = [choice for choice, value in quiz_values.items() if value]
 
+                                    # Correct Answer
                                     if quiz_questions[current_question]["answer"] == selected_answer:
                                         score += 1
-                                        explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
                                         if values['practice']:
+                                            explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
                                             sg.popup_ok(f"Good Job!\n\n{explain}")
 
                                     elif values['practice']:
-                                        sg.popup_ok(f"OOP!\n\n{quiz_questions[current_question]['explanation']}")
+                                        explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
+                                        sg.popup_ok(f"Wrong!\n\n{explain}")
+
                                     current_question += 1
                                     quiz.close()
                                     break
+                        else:
+                            if values['test']:
+                                sg.popup_ok("FINAL SCORE:")
 
-            else:
-                sg.popup_ok("Select quiz type and length before beginning")
+            # else:
+            #     sg.popup_ok("Select quiz type and length before beginning")
 
     # Close the window
     nav.close()
