@@ -9,7 +9,6 @@ import pickle
 
 import PySimpleGUI as sg
 
-# TODO: Show details of test results
 # TODO: Manual editing of questions
 # TODO: Image processing or manual adding
 
@@ -67,20 +66,10 @@ def extract_chapter_map(doc, page_text_rect):
             chapter_map[answer_chapter_match]["answer_start_page"] = chapter[2] - 1
             end_page_check = toc[i + 1][2] - 1
 
-            # Check for blank pages
-            blank_check = 2
-            # while True:
-            #     doc_text = doc[toc[i + 1][2] - blank_check].get_text()
-            #     if not doc_text:
-            #         blank_check += 1
-            #     else:
-            #         break
-            # print(f"***************************************\nLAST ANSWER PAGE FOR CHAPTER {i-18}:\n{doc_text}\n***************************************\n")
             while True:
                 doc_text = doc[end_page_check].get_text()
                 if doc_text and re.findall(regex_answers, doc_text, re.MULTILINE):
                     last_answer_page_data = re.findall(regex_answer_nums, doc_text, re.MULTILINE)
-                    print(last_answer_page_data)
                     if str(chapter_map[answer_chapter_match]["total_questions"]) in last_answer_page_data:
                         chapter_map[answer_chapter_match]["answer_end_page"] = end_page_check
                         break
@@ -93,8 +82,6 @@ def extract_chapter_map(doc, page_text_rect):
                     end_page_check -= 1
             answer_chapter_match += 1
 
-    print(json.dumps(chapter_map, indent=2))
-    quit()
     return chapter_map
 
 
