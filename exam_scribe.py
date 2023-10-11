@@ -16,7 +16,7 @@ import PySimpleGUI as sg
 def extract_chapter_map(doc, page_text_rect):
     toc = doc.get_toc()
     chapter_map = []
-    answer_match = 0
+    answer_chapter_match = 0
     for i, chapter in enumerate(toc):
         if chapter[0] == 1 and chapter[1].startswith("Chapter "):
             regex_question_and_choices = r"^[\d|\s\d][\d\s]*\.\s(?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*)"
@@ -63,30 +63,38 @@ def extract_chapter_map(doc, page_text_rect):
             })
         elif chapter[1].startswith("Answers to Chapter ") or (chapter[0] == 2 and chapter[1].startswith("Chapter ")):
             regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
-            chapter_map[answer_match]["answer_start_page"] = chapter[2] - 1
+            regex_answer_nums = r"^[\d|\s\d][\d' ']*(?=\.[\s]*[A-Z])"
+            chapter_map[answer_chapter_match]["answer_start_page"] = chapter[2] - 1
+            end_page_check = toc[i + 1][2] - 1
 
             # Check for blank pages
             blank_check = 2
+            # while True:
+            #     doc_text = doc[toc[i + 1][2] - blank_check].get_text()
+            #     if not doc_text:
+            #         blank_check += 1
+            #     else:
+            #         break
+            # print(f"***************************************\nLAST ANSWER PAGE FOR CHAPTER {i-18}:\n{doc_text}\n***************************************\n")
             while True:
-                doc_text = doc[toc[i + 1][2] - blank_check].get_text()
-                if not doc_text:
-                    blank_check += 1
+                doc_text = doc[end_page_check].get_text()
+                if doc_text and re.findall(regex_answers, doc_text, re.MULTILINE):
+                    last_answer_page_data = re.findall(regex_answer_nums, doc_text, re.MULTILINE)
+                    print(last_answer_page_data)
+                    if str(chapter_map[answer_chapter_match]["total_questions"]) in last_answer_page_data:
+                        chapter_map[answer_chapter_match]["answer_end_page"] = end_page_check
+                        break
+                    elif end_page_check == chapter_map[answer_chapter_match]["answer_start_page"]:
+                        sg.popup_error("ERROR FINDING ANSWER CHAPTERS")
+                        break
+                    else:
+                        end_page_check -= 1
                 else:
-                    break
+                    end_page_check -= 1
+            answer_chapter_match += 1
 
-            last_answer_page_data = re.findall(regex_answers, doc_text, re.MULTILINE)
-            if not last_answer_page_data:
-                last_answer_page_data = [[0]]
-
-            # check if last full page of answers has the final answer
-            if last_answer_page_data[-1][0] == chapter_map[answer_match]["total_questions"]:
-                # if it doesn't, last page should be the same as next chapter starting page
-                chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 2
-            else:
-                # if it does, it should be a page before
-                chapter_map[answer_match]["answer_end_page"] = toc[i + 1][2] - 1
-            answer_match += 1
     print(json.dumps(chapter_map, indent=2))
+    quit()
     return chapter_map
 
 
@@ -106,7 +114,7 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
     page_number = chapter["question_start_page"]
 
     multi_page = ""
-    # for x in range(chapter["question_start_page"], chapter["question_end_page"] + 1):
+
     while page_number <= chapter["question_end_page"]:
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
@@ -121,12 +129,9 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
             for question in page_questions:
                 question_num = int(question[0])
-                try:
-                    choices = choice_cleanup(question[2].strip())
-                except IndexError:
-                    print("PAGE NUMBER: ", page_number)
-                    print(multi_page)
-                    quit()
+
+                choices = choice_cleanup(question[2].strip())
+
                 question_bank[question_num] = {
                     "question_num": question_num,
                     "question": question[1].strip(),
@@ -150,10 +155,11 @@ def extract_answers(doc, chapter, page_text_rect):
     page_number = chapter["answer_start_page"]
 
     while page_number <= chapter["answer_end_page"]:
-
+        print(doc[685].get_textbox(page_text_rect))
+        quit()
         doc_text = doc[page_number].get_textbox(page_text_rect)
 
-        if (re.findall(regex_answer_num, doc_text, re.MULTILINE) and page_number != chapter["answer_start_page"]) or page_number == \
+        if (re.match(regex_answer_num, doc_text.strip()) and page_number != chapter["answer_start_page"]) or page_number == \
                 chapter["answer_end_page"]:
             if page_number == chapter["answer_end_page"]:
                 # Checks if the next chapters answers start on the same page
