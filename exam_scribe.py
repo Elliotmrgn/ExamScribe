@@ -13,16 +13,17 @@ import PySimpleGUI as sg
 # TODO: Manual editing of questions
 # TODO: Image processing or manual adding
 
-def extract_chapter_map(doc):
+def extract_chapter_map(doc, page_text_rect):
     toc = doc.get_toc()
     chapter_map = []
     answer_match = 0
     for i, chapter in enumerate(toc):
         if chapter[0] == 1 and chapter[1].startswith("Chapter "):
-            regex_question_and_choices = r"^\d[\d\s]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
+            regex_question_and_choices = r"^[\d|\s\d][\d\s]*\.\s(?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*)"
             regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
             start_page_check = chapter[2] - 1
             end_page_check = toc[i + 1][2] - 2
+
             total_questions = 0
             spillover_case = False
             while True:
@@ -34,7 +35,7 @@ def extract_chapter_map(doc):
                     last_page_spillover_case = re.findall(regex_choice_spillover, doc[end_page_check].get_text(),
                                                           re.MULTILINE)
                     if last_page_text:
-                        regex_question_num = r"^\d[\d\s]*(?=\.\s)"
+                        regex_question_num = r"^[\d|\s\d][\d' ']*(?=\.\s)"
                         total_questions = int(re.findall(regex_question_num, last_page_text[-1], re.MULTILINE)[0])
                         if spillover_case:
                             end_page_check += 1
@@ -98,8 +99,8 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
         return clean_choices
 
     # -------------------------------------------------
-    regex_question_and_choices = r"^(\d[\d' ']*)\.\s(.*(?:\r?\n(?![a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?!\d[\d' ']*\.\s)[^\n]*|)*)"
-    regex_question_num = r"^\d[\d' ']*\.\s"
+    regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
+    regex_question_num = r"^[\d|\s\d][\d' ']*\.\s"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
     page_number = chapter["question_start_page"]
@@ -120,7 +121,12 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
             for question in page_questions:
                 question_num = int(question[0])
-                choices = choice_cleanup(question[2].strip())
+                try:
+                    choices = choice_cleanup(question[2].strip())
+                except IndexError:
+                    print("PAGE NUMBER: ", page_number)
+                    print(multi_page)
+                    quit()
                 question_bank[question_num] = {
                     "question_num": question_num,
                     "question": question[1].strip(),
@@ -137,19 +143,17 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
 
 def extract_answers(doc, chapter, page_text_rect):
-    regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
-    regex_answer_num = r"^\d[\d' ']*\.\s[A-Z]"
-    regex_explanation_spillover = r"^(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
-    previous_result = 0
+    regex_answers = r"^([\d|\s\d][\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*))"
+    regex_answer_num = r"^[\d|\s\d][\d' ']*\.\s[A-Z]"
+
     multi_page = ""
     page_number = chapter["answer_start_page"]
 
-    # for page in range(chapter["answer_start_page"], chapter["answer_end_page"] + 1):
     while page_number <= chapter["answer_end_page"]:
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
 
-        if (re.match(regex_answer_num, doc_text) and page_number != chapter["answer_start_page"]) or page_number == \
+        if (re.findall(regex_answer_num, doc_text, re.MULTILINE) and page_number != chapter["answer_start_page"]) or page_number == \
                 chapter["answer_end_page"]:
             if page_number == chapter["answer_end_page"]:
                 # Checks if the next chapters answers start on the same page
@@ -163,7 +167,6 @@ def extract_answers(doc, chapter, page_text_rect):
                 multi_page += f"\n{doc_text}"
 
             answer_data = re.findall(regex_answers, multi_page, re.MULTILINE)
-
             for answer in answer_data:
 
                 question_num = int(answer[0].replace(' ', ''))
@@ -173,7 +176,6 @@ def extract_answers(doc, chapter, page_text_rect):
                     continue
                 # check if there is already an answer built for the current question then break
                 elif "answer" in chapter["question_bank"][question_num]:
-                    # print(json.dumps(chapter, indent=2))
                     break
                 # otherwise build the answer
                 else:
@@ -199,17 +201,16 @@ def pdf_processing(file_path):
         if file_exists_ans == 'Cancel':
             return
 
-    # processes the mapping of chapters
-    chapter_map = extract_chapter_map(doc)
-
     # create rect to remove header
     page_text_rect = (0, 60, doc[0].rect.width, doc[0].rect.height)
+
+    # processes the mapping of chapters
+    chapter_map = extract_chapter_map(doc, page_text_rect)
 
     # extract all questions and answers for each chapter
     for chapter_num, chapter in enumerate(chapter_map):
         chapter["question_bank"] = extract_questions(doc, chapter, chapter_num + 1, page_text_rect)
         extract_answers(doc, chapter, page_text_rect)
-
     # save the data to a binary file for later use
     with open(f'./bins/{title}', 'wb') as file:
         pickle.dump(chapter_map, file)
@@ -269,10 +270,16 @@ def load_previous_pdfs():
 
 
 def nav_window(filelist):
-    # starting window to add, remove, or select quiz
     layout = [
         [sg.Text("PDF Titles:")],
-        [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
+        [sg.Column([
+            [sg.Listbox(filelist, size=(60, 8), expand_y=True, enable_events=True, key="-LIST-")],
+
+        ], pad=0),
+        sg.Column([
+            [sg.Button(key="-ADD-", button_text="Add")],
+            [sg.Button('Remove')],
+        ])],
         [sg.pin(
             sg.Column([
                 [sg.InputText(key="input_path"),
@@ -282,7 +289,7 @@ def nav_window(filelist):
         )],
         # [sg.Text("Select a PDF:")],
 
-        [sg.Button(key="-ADD-", button_text="Add"), sg.Button('Remove')],
+
         [sg.pin(
             sg.Column([
                 [sg.Text("Quiz Type:"), sg.Radio("Test", "quiz_type", key="test", enable_events=True),
@@ -293,6 +300,7 @@ def nav_window(filelist):
             ], key="settings-col", pad=(0, 0), visible=False)
         )],
     ]
+    # starting window to add, remove, or select quiz
     # Define the layout of the GUI
     # Create the window
     return sg.Window("PDF Reader", layout)
@@ -301,8 +309,9 @@ def nav_window(filelist):
 def quiz_window(question_number, current_question, quiz_type, score):
     # generates quiz window and dynamically adds choices
     layout = [
-        [sg.Text(f'Question {question_number}: ')],
-        [sg.Text(f"{current_question['question']}")],
+        [sg.Frame(f'Question {question_number}: ', [[sg.Text(f"{current_question['question']}")]])],
+        # [sg.Text(f'Question {question_number}: ')],
+        # [sg.Text(f"{current_question['question']}")],
     ]
     if len(current_question['answer']) == 1:
         choice_buttons = [[sg.Radio(choice[1], question_number, key=choice[0])] for choice in
@@ -379,7 +388,6 @@ def main():
                 pdf_processing(file_path)
                 # Reload the list elements
                 nav['-LIST-'].update(load_previous_pdfs())
-
                 nav['add-browser'].update(visible=False)
                 nav['input_path'].update('')
 
