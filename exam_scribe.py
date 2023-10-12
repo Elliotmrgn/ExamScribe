@@ -65,11 +65,14 @@ def extract_chapter_map(doc, page_text_rect):
             regex_answer_nums = r"^[\d|\s\d][\d' ']*(?=\.[\s]*[A-Z])"
             chapter_map[answer_chapter_match]["answer_start_page"] = chapter[2] - 1
             end_page_check = toc[i + 1][2] - 1
-
+            x = 0
             while True:
                 doc_text = doc[end_page_check].get_text()
-                if doc_text and re.findall(regex_answers, doc_text, re.MULTILINE):
+
+                if doc_text and re.findall(regex_answer_nums, doc_text, re.MULTILINE):
                     last_answer_page_data = re.findall(regex_answer_nums, doc_text, re.MULTILINE)
+                    last_answer_page_data = [number.replace(' ', '') for number in last_answer_page_data]
+                    print(last_answer_page_data)
                     if str(chapter_map[answer_chapter_match]["total_questions"]) in last_answer_page_data:
                         chapter_map[answer_chapter_match]["answer_end_page"] = end_page_check
                         break
@@ -80,7 +83,10 @@ def extract_chapter_map(doc, page_text_rect):
                         end_page_check -= 1
                 else:
                     end_page_check -= 1
+
             answer_chapter_match += 1
+
+    print(json.dumps(chapter_map, indent=2))
 
     return chapter_map
 
@@ -94,7 +100,7 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
         return clean_choices
 
     # -------------------------------------------------
-    regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[a-zA-Z]\.)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
+    regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[a-zA-Z]\.\s)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
     regex_question_num = r"^[\d|\s\d][\d' ']*\.\s"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
@@ -116,8 +122,13 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
             for question in page_questions:
                 question_num = int(question[0])
-
-                choices = choice_cleanup(question[2].strip())
+                try:
+                    choices = choice_cleanup(question[2].strip())
+                except IndexError:
+                    print(json.dumps(question_bank, indent=2))
+                    print(multi_page)
+                    # print(json.dumps(question, indent=2))
+                    quit()
 
                 question_bank[question_num] = {
                     "question_num": question_num,
@@ -135,15 +146,15 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
 
 def extract_answers(doc, chapter, page_text_rect):
-    regex_answers = r"^([\d|\s\d][\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*))"
+    regex_answers = r"^([\d|\s\d][\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z]|(?:[A-Z]\sand\s[A-Z]))\.\s*((?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*))"
     regex_answer_num = r"^[\d|\s\d][\d' ']*\.\s[A-Z]"
 
     multi_page = ""
     page_number = chapter["answer_start_page"]
-
+    # print(doc[281].get_textbox(page_text_rect))
+    # quit()
     while page_number <= chapter["answer_end_page"]:
-        print(doc[685].get_textbox(page_text_rect))
-        quit()
+
         doc_text = doc[page_number].get_textbox(page_text_rect)
 
         if (re.match(regex_answer_num, doc_text.strip()) and page_number != chapter["answer_start_page"]) or page_number == \
@@ -172,8 +183,13 @@ def extract_answers(doc, chapter, page_text_rect):
                     break
                 # otherwise build the answer
                 else:
-                    answers_list = answer[1].split(', ')
-                    chapter["question_bank"][question_num]["answer"] = answers_list
+                    all_answers = answer[1]
+                    # Check for multiple answers
+                    if ',' in answer[1]:
+                        all_answers = answer[1].split(', ')
+                    elif 'and' in answer[1]:
+                        all_answers = answer[1].split(' and ')
+                    chapter["question_bank"][question_num]["answer"] = all_answers
                     chapter["question_bank"][question_num]["explanation"] = answer[2]
 
             multi_page = ""
@@ -181,11 +197,14 @@ def extract_answers(doc, chapter, page_text_rect):
         multi_page += f"\n{doc_text}"
         page_number += 1
 
-
 # Function to open and process the selected PDF file
 def pdf_processing(file_path):
     doc = fitz.open(file_path)
-    title = sanitize_file_name(doc.metadata["title"])
+    title = doc.metadata["title"]
+    if title:
+        title = sanitize_file_name(doc.metadata["title"])
+    else:
+        title = sanitize_file_name(os.path.splitext(os.path.basename(file_path))[0])
 
     # Check if the file already exists before overwriting
     if os.path.exists(f'./bins/{title}'):
@@ -212,6 +231,7 @@ def pdf_processing(file_path):
 def sanitize_file_name(file_name):
     # Define a translation table to remove characters that are not allowed in file names
     # We'll keep all letters, digits, and some common file name-safe characters like '-', '_', and '.'
+    file_name = file_name.replace(' ', '-')
     allowed_characters = string.ascii_letters + string.digits + "-_."
 
     # Create a translation table that maps all characters not in the allowed set to None (removes them)
@@ -306,6 +326,11 @@ def quiz_window(question_number, current_question, quiz_type, score):
         # [sg.Text(f'Question {question_number}: ')],
         # [sg.Text(f"{current_question['question']}")],
     ]
+    try:
+        len(current_question['answer'])
+    except KeyError:
+        print(json.dumps(current_question, indent=2))
+        quit()
     if len(current_question['answer']) == 1:
         choice_buttons = [[sg.Radio(choice[1], question_number, key=choice[0])] for choice in
                           current_question['choices']]
