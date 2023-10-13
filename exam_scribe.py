@@ -9,8 +9,10 @@ import pickle
 
 import PySimpleGUI as sg
 
+# TODO: Add 'Match The Following' Questions
 # TODO: Manual editing of questions
 # TODO: Image processing or manual adding
+
 
 def extract_chapter_map(doc, page_text_rect):
     toc = doc.get_toc()
@@ -18,7 +20,9 @@ def extract_chapter_map(doc, page_text_rect):
     answer_chapter_match = 0
     for i, chapter in enumerate(toc):
         if chapter[0] == 1 and chapter[1].startswith("Chapter "):
-            regex_question_and_choices = r"^[\d|\s\d][\d\s]*\.\s(?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*)"
+            regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[a-zA-Z]\.\s)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
+
+            # regex_question_and_choices = r"^[\d|\s\d][\d\s]*\.\s(?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*)"
             regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
             start_page_check = chapter[2] - 1
             end_page_check = toc[i + 1][2] - 2
@@ -34,8 +38,8 @@ def extract_chapter_map(doc, page_text_rect):
                     last_page_spillover_case = re.findall(regex_choice_spillover, doc[end_page_check].get_text(),
                                                           re.MULTILINE)
                     if last_page_text:
-                        regex_question_num = r"^[\d|\s\d][\d' ']*(?=\.\s)"
-                        total_questions = int(re.findall(regex_question_num, last_page_text[-1], re.MULTILINE)[0])
+
+                        total_questions = int(last_page_text[-1][0])
                         if spillover_case:
                             end_page_check += 1
                         break
@@ -53,14 +57,14 @@ def extract_chapter_map(doc, page_text_rect):
                         break
 
             chapter_map.append({
-                "number": int(chapter[1][8]),
+                "number": int(chapter[1].split(" ")[1]),
                 "title": chapter[1],
                 "question_start_page": start_page_check,
                 "question_end_page": end_page_check,
                 "total_questions": total_questions
 
             })
-        elif chapter[1].startswith("Answers to Chapter ") or (chapter[0] == 2 and chapter[1].startswith("Chapter ")):
+        elif chapter[1].startswith("Answers to Chapter ") or (chapter[0] == 2 and chapter[1].startswith("Chapter")):
             regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
             regex_answer_nums = r"^[\d|\s\d][\d' ']*(?=\.[\s]*[A-Z])"
             chapter_map[answer_chapter_match]["answer_start_page"] = chapter[2] - 1
@@ -72,7 +76,7 @@ def extract_chapter_map(doc, page_text_rect):
                 if doc_text and re.findall(regex_answer_nums, doc_text, re.MULTILINE):
                     last_answer_page_data = re.findall(regex_answer_nums, doc_text, re.MULTILINE)
                     last_answer_page_data = [number.replace(' ', '') for number in last_answer_page_data]
-                    print(last_answer_page_data)
+                    # print(last_answer_page_data)
                     if str(chapter_map[answer_chapter_match]["total_questions"]) in last_answer_page_data:
                         chapter_map[answer_chapter_match]["answer_end_page"] = end_page_check
                         break
@@ -101,18 +105,18 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
     # -------------------------------------------------
     regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[a-zA-Z]\.\s)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
-    regex_question_num = r"^[\d|\s\d][\d' ']*\.\s"
+    regex_question_num = r"^([\d|\s\d][\d' ']*)\.\s"
     regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
     question_bank = {}
     page_number = chapter["question_start_page"]
 
     multi_page = ""
-
+    match_skip = False
     while page_number <= chapter["question_end_page"]:
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
-
-        if (re.match(regex_question_num, doc_text) and page_number != chapter["question_start_page"]) or page_number == \
+        clean_page_check = re.match(regex_question_num, doc_text)
+        if (clean_page_check and int(clean_page_check[1]) not in question_bank and page_number != chapter["question_start_page"]) or page_number == \
                 chapter["question_end_page"]:
             if page_number == chapter["question_end_page"]:
                 multi_page += f"\n{doc_text}"
@@ -121,14 +125,52 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
             page_questions = re.findall(regex_question_and_choices, multi_page, re.MULTILINE)
 
             for question in page_questions:
+
+                if 'match' in question[1].strip().lower():
+                    chapter["total_questions"] -= 1
+                    match_skip = True
+                    continue
+
+
                 question_num = int(question[0])
+
+                # Checks if a question was skipped due to format error
+                if question_num > 1:
+
+                    if question_num-1 not in question_bank and not match_skip:
+
+                        question_error_yes_no = sg.popup_yes_no(f"Error adding chapter {chapter_num} question {question_num-1}. Would you like to input it manually?")
+                        if question_error_yes_no == 'Yes':
+                            while True:
+                                question_error_text = sg.popup_get_text("Enter the question text")
+                                if question_error_text:
+                                    break
+                            while True:
+                                question_error_choices = sg.popup_get_text("Enter the choices (copy and paste)")
+                                if question_error_choices:
+                                    question_error_choices = choice_cleanup(question_error_choices)
+                                    break
+                            question_bank[question_num-1] = {
+                                "question_num": question_num-1,
+                                "question": question_error_text.strip(),
+                                "choices": question_error_choices,
+                                "chapter_number": chapter_num
+                            }
+                        else:
+                            chapter["total_questions"] -= 1
+
+                if match_skip:
+                    match_skip = False
+
                 try:
                     choices = choice_cleanup(question[2].strip())
                 except IndexError:
                     print(json.dumps(question_bank, indent=2))
                     print(multi_page)
+                    print("INDEX ERROR IN EXTRACT QUESTION")
                     # print(json.dumps(question, indent=2))
                     quit()
+
 
                 question_bank[question_num] = {
                     "question_num": question_num,
@@ -146,16 +188,18 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
 
 
 def extract_answers(doc, chapter, page_text_rect):
-    regex_answers = r"^([\d|\s\d][\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z]|(?:[A-Z]\sand\s[A-Z]))\.\s*((?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*))"
-    regex_answer_num = r"^[\d|\s\d][\d' ']*\.\s[A-Z]"
+    regex_answers = r"^([\d|\s\d][\d' ']*)\.\s*((?:[A-Z][,\s]*[\sand\s]*[\sor\s]*)*[A-Z])\.\s*((?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*)*))"
+    regex_answer_num = r"^([\d|\s\d][\d' ']*)\.\s[A-Z]"
 
     multi_page = ""
     page_number = chapter["answer_start_page"]
-    # print(doc[281].get_textbox(page_text_rect))
-    # quit()
+    print(f"STARTING CHAPTER TOTAL: {chapter['total_questions']}")
     while page_number <= chapter["answer_end_page"]:
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
+
+        # Check if the first line on the page is an answer or if its the last page. Skips 1st page
+        # This is to extract the answers when there is no overflow
 
         if (re.match(regex_answer_num, doc_text.strip()) and page_number != chapter["answer_start_page"]) or page_number == \
                 chapter["answer_end_page"]:
@@ -174,6 +218,9 @@ def extract_answers(doc, chapter, page_text_rect):
             for answer in answer_data:
 
                 question_num = int(answer[0].replace(' ', ''))
+                # If the question was not added to the question bank skip it
+                if question_num not in chapter["question_bank"]:
+                    continue
 
                 # check if the current question is not 1 and this chapters question 1 doesn't exist then skip
                 if question_num != 1 and "answer" not in chapter["question_bank"][1]:
@@ -183,13 +230,38 @@ def extract_answers(doc, chapter, page_text_rect):
                     break
                 # otherwise build the answer
                 else:
+                    # Check if there is an error adding an answer due to formatting
+                    if question_num > 1:
+                        if question_num-1 in chapter["question_bank"]:
+                            # Catches if an answer was skipped and allows user input
+                            if 'answer' not in chapter["question_bank"][question_num - 1]:
+                                # print(f"*****************************\n{multi_page}\n*****************************\n")
+                                # print(json.dumps(chapter["question_bank"], indent=2))
+                                answer_error = sg.popup_yes_no(f"Error adding answer for chapter {chapter['question_bank'][question_num - 1]['chapter_number']} question {question_num - 1}. Would you like to add it manually?")
+                                if answer_error == 'Yes':
+                                    while True:
+                                        user_error_answer = sg.popup_get_text(f"Enter the correct answer to chapter {chapter['question_bank'][question_num - 1]['chapter_number']} question {question_num - 1}")
+                                        user_error_answer = user_error_answer.strip().replace(' ', '').replace(',', '')
+                                        if user_error_answer:
+                                            break
+                                    while True:
+                                        user_error_explanation = sg.popup_get_text(f"Enter the explanation to chapter {chapter['question_bank'][question_num - 1]['chapter_number']} question {question_num - 1}")
+                                        if user_error_explanation:
+                                            break
+                                    chapter["question_bank"][question_num-1]["answer"] = list(user_error_answer)
+                                    chapter["question_bank"][question_num-1]["explanation"] = user_error_explanation
+                                else:
+                                    chapter["total_questions"] -= 1
+                                    print(f"chapter {chapter['number']} HIT!!\nreported total: {chapter['total_questions']}")
+
+                                    del(chapter["question_bank"][question_num - 1])
+
                     all_answers = answer[1]
                     # Check for multiple answers
-                    if ',' in answer[1]:
-                        all_answers = answer[1].split(', ')
-                    elif 'and' in answer[1]:
-                        all_answers = answer[1].split(' and ')
-                    chapter["question_bank"][question_num]["answer"] = all_answers
+                    if ',' in answer[1] or 'and' in answer[1]:
+                        all_answers = answer[1].replace(',', '').replace(' ', '').replace('and', '').replace('or', '')
+
+                    chapter["question_bank"][question_num]["answer"] = list(all_answers)
                     chapter["question_bank"][question_num]["explanation"] = answer[2]
 
             multi_page = ""
@@ -220,9 +292,23 @@ def pdf_processing(file_path):
     chapter_map = extract_chapter_map(doc, page_text_rect)
 
     # extract all questions and answers for each chapter
+
     for chapter_num, chapter in enumerate(chapter_map):
         chapter["question_bank"] = extract_questions(doc, chapter, chapter_num + 1, page_text_rect)
         extract_answers(doc, chapter, page_text_rect)
+
+    else:
+        tot = 0
+        act =0
+        for xxx, ch in enumerate(chapter_map):
+            print(f'TOTAL QUESTIONS FOR CHAPTER {xxx+1}: {ch["total_questions"]} vs {len(ch["question_bank"])}')
+            tot += ch["total_questions"]
+            act += len(ch["question_bank"])
+        else:
+            print(f"TOTAL QUESTIONS = {tot}")
+            print(f"ACTUAL TOTAL: {act}")
+
+
     # save the data to a binary file for later use
     with open(f'./bins/{title}', 'wb') as file:
         pickle.dump(chapter_map, file)
@@ -251,19 +337,29 @@ def question_randomizer(pdf_questions, total_questions=100):
     total_chapters = len(pdf_questions)
     questions_per_chapter = [0 for _ in range(total_chapters)]
     chosen_questions = [[] for _ in range(total_chapters)]
-
+    x = 0
     for _ in range(total_questions):
         while True:
+            x+=1
             random_chapter = random.randint(0, total_chapters - 1)
             # add 1 if chosen random chapters value is less than the total number of questions for that chapter
+
             if questions_per_chapter[random_chapter] < pdf_questions[random_chapter]["total_questions"]:
                 questions_per_chapter[random_chapter] += 1
                 break
 
+
     for i in range(total_chapters):
         if questions_per_chapter[i]:
-            chosen_questions[i].extend(
-                random.sample(list(pdf_questions[i]["question_bank"].values()), questions_per_chapter[i]))
+            try:
+                chosen_questions[i].extend(random.sample(list(pdf_questions[i]["question_bank"].values()), questions_per_chapter[i]))
+            except ValueError:
+                for o in range(total_chapters):
+                    print(f'LENGTH OF CHAPTER {o+1}: {len(list(pdf_questions[o]["question_bank"].values()))}')
+                    print(f'TOTAL QUESTIONS: {questions_per_chapter[o]}')
+                    print()
+                quit()
+
 
     # flattens list to be randomized
     chosen_questions = [question for chapter in chosen_questions for question in chapter]
@@ -326,11 +422,7 @@ def quiz_window(question_number, current_question, quiz_type, score):
         # [sg.Text(f'Question {question_number}: ')],
         # [sg.Text(f"{current_question['question']}")],
     ]
-    try:
-        len(current_question['answer'])
-    except KeyError:
-        print(json.dumps(current_question, indent=2))
-        quit()
+
     if len(current_question['answer']) == 1:
         choice_buttons = [[sg.Radio(choice[1], question_number, key=choice[0])] for choice in
                           current_question['choices']]
@@ -458,10 +550,11 @@ def main():
         # Start Quiz
 
         if event == "Start":
-            print(values)
             # Check that everything is entered to begin the quiz
             if values['quiz-len'] and values['test'] or values['practice']:
                 if not quiz and pdf_questions:
+                    for o,chapter in enumerate(pdf_questions):
+                        print(f'Chapter {o+1} Length: {len(chapter["question_bank"])}')
 
                     # Set quiz type
                     if values['test']:
@@ -479,6 +572,35 @@ def main():
                     score = 0
                     closed = False
                     wrong_questions = [[] for _ in range(len(pdf_questions))]
+
+                    # TESTING ALL QUESTIONS AND ANSWERS FOR ERROR
+                    # test = 1
+                    # for question in quiz_questions:
+                    #     try:
+                    #         if question["question_num"] == 41:
+                    #             sg.popup_ok(json.dumps(question, indent=2))
+                    #
+                    #             # quit()
+                    #         print(question["question_num"])
+                    #         print(question["question"])
+                    #         for choice in question["choices"]:
+                    #             count = 0
+                    #             for field in choice:
+                    #                 print(field)
+                    #                 count += 1
+                    #             if count != 2:
+                    #                 quit()
+                    #         print(question["chapter_number"])
+                    #         for answer in question["answer"]:
+                    #             print(answer)
+                    #         print(question["explanation"])
+                    #         print(f"TESTED QUESTION: {test}")
+                    #         test += 1
+                    #     except:
+                    #         print(json.dumps(question, indent=2))
+                    #         quit()
+                    # else:
+                    #     quit()
 
                     if quiz_questions:
                         while current_question + 1 <= quiz_total_questions:
@@ -513,6 +635,9 @@ def main():
                                         if values['practice']:
                                             explain = quiz_questions[current_question]['explanation'].replace(f'\n', ' ')
                                             sg.popup_ok(f"Wrong!\n\n{explain}")
+                                            print(selected_answer)
+                                            print('***')
+                                            print(json.dumps(quiz_questions[current_question], indent=2))
                                         elif values['test']:
                                             wrong_questions[quiz_questions[current_question]['chapter_number'] - 1].append(quiz_questions[current_question])
 
