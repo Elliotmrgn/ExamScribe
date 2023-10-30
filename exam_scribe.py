@@ -18,9 +18,12 @@ def extract_chapter_map(doc, page_text_rect):
     toc = doc.get_toc()
     chapter_map = []
     answer_chapter_match = 0
+    answer_section = False
     for i, chapter in enumerate(toc):
-        if chapter[0] == 1 and chapter[1].startswith("Chapter "):
-            regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[a-zA-Z]\.\s)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
+
+
+        if not answer_section and chapter[1].startswith("Chapter "):
+            regex_question_and_choices = r"^([\d|\s\d][\d' ']*)\.\s(.*(?:\r?\n(?![\s]*[A-Z]\.\s)[^\n]*|)*)(.*(?:\r?\n(?![\d|\s\d][\d' ']*\.\s)[^\n]*|)*)"
 
             # regex_question_and_choices = r"^[\d|\s\d][\d\s]*\.\s(?:.*(?:\r?\n(?![\d|\s\d][\d\s]*\.\s)[^\n]*|)*)"
             regex_choice_spillover = r"^[A-Z]*\.\s(?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*)"
@@ -31,7 +34,9 @@ def extract_chapter_map(doc, page_text_rect):
             spillover_case = False
             while True:
                 # Goes through pages to see if they have questions to find real start and end page
-                if re.findall(regex_question_and_choices, doc[start_page_check].get_text(), re.MULTILINE):
+                question_check = re.findall(regex_question_and_choices, doc[start_page_check].get_text(), re.MULTILINE)
+
+                if question_check and question_check[0][2]:
                     # Once start page is found checks for end page
                     last_page_text = re.findall(regex_question_and_choices, doc[end_page_check].get_text(),
                                                 re.MULTILINE)
@@ -64,7 +69,11 @@ def extract_chapter_map(doc, page_text_rect):
                 "total_questions": total_questions
 
             })
-        elif chapter[1].startswith("Answers to Chapter ") or (chapter[0] == 2 and chapter[1].startswith("Chapter")):
+
+        elif chapter[1].startswith("Appendix Answers") or chapter[1].startswith("Answers"):
+            answer_section = True
+
+        elif chapter[1].startswith("Answers to Chapter ") or (answer_section and chapter[1].startswith("Chapter")):
             regex_answers = r"^(\d[\d' ']*)\.\s*((?:[A-Z],\s*)*[A-Z])\.\s*((?:.*(?:\r?\n(?!\d[\d\s]*\.\s)[^\n]*|)*))"
             regex_answer_nums = r"^[\d|\s\d][\d' ']*(?=\.[\s]*[A-Z])"
             chapter_map[answer_chapter_match]["answer_start_page"] = chapter[2] - 1
@@ -89,9 +98,8 @@ def extract_chapter_map(doc, page_text_rect):
                     end_page_check -= 1
 
             answer_chapter_match += 1
-
     print(json.dumps(chapter_map, indent=2))
-
+    print(doc[404].get_text())
     return chapter_map
 
 
@@ -138,24 +146,27 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
                 if question_num > 1:
 
                     if question_num-1 not in question_bank and not match_skip:
-
+                        print(json.dumps(page_questions, indent=2))
                         question_error_yes_no = sg.popup_yes_no(f"Error adding chapter {chapter_num} question {question_num-1}. Would you like to input it manually?")
                         if question_error_yes_no == 'Yes':
-                            while True:
-                                question_error_text = sg.popup_get_text("Enter the question text")
-                                if question_error_text:
-                                    break
-                            while True:
-                                question_error_choices = sg.popup_get_text("Enter the choices (copy and paste)")
-                                if question_error_choices:
-                                    question_error_choices = choice_cleanup(question_error_choices)
-                                    break
-                            question_bank[question_num-1] = {
-                                "question_num": question_num-1,
-                                "question": question_error_text.strip(),
-                                "choices": question_error_choices,
-                                "chapter_number": chapter_num
-                            }
+
+                            question_error_text = sg.popup_get_text("Enter the question text")
+
+
+                            if question_error_text:
+                                while True:
+                                    question_error_choices = sg.popup_get_text("Enter the choices (copy and paste)")
+                                    if question_error_choices:
+                                        question_error_choices = choice_cleanup(question_error_choices)
+                                        break
+                                question_bank[question_num-1] = {
+                                    "question_num": question_num-1,
+                                    "question": question_error_text.strip(),
+                                    "choices": question_error_choices,
+                                    "chapter_number": chapter_num
+                                }
+                            else:
+                                chapter["total_questions"] -= 1
                         else:
                             chapter["total_questions"] -= 1
 
@@ -184,6 +195,7 @@ def extract_questions(doc, chapter, chapter_num, page_text_rect):
         multi_page += f"\n{doc_text}"
         page_number += 1
 
+
     return question_bank
 
 
@@ -193,7 +205,7 @@ def extract_answers(doc, chapter, page_text_rect):
 
     multi_page = ""
     page_number = chapter["answer_start_page"]
-    print(f"STARTING CHAPTER TOTAL: {chapter['total_questions']}")
+    # print(f"STARTING CHAPTER TOTAL: {chapter['total_questions']}")
     while page_number <= chapter["answer_end_page"]:
 
         doc_text = doc[page_number].get_textbox(page_text_rect)
@@ -455,7 +467,7 @@ def score_window(score, quiz_total_questions, wrong_questions):
             # for question in chapter:
             #     wrong_questions_display.append()
         # wrong_questions_display.append()
-        print(show_detail_display)
+        # print(show_detail_display)
 
     layout = [
         [sg.Text(f"Final Score: {score} / {quiz_total_questions}  -  {score / quiz_total_questions * 100:.2f}", key="final-score")],
@@ -475,22 +487,24 @@ def score_window(score, quiz_total_questions, wrong_questions):
 def main():
     # Main function to create and run the GUI
 
-    sg.set_options(font=('Arial Bold', 16))
+    sg.set_options(font=('Arial Bold', 24))
     filelist = load_previous_pdfs()
     quiz = None
-
     nav = nav_window(filelist)
+
     # Nav screen loop
     while True:
         event, values = nav.read()
-        print(event)
+        # print(event)
         # Window closed
         if event == sg.WINDOW_CLOSED:
             break
 
-        # Add new pdf
+        # ADD BUTTON ------------------------------------------------
         if event == "-ADD-":
+            # add_file = sg.popup_get_file("Choose PDF to add", file_types=(("PDF files", "*.pdf"),))
             nav['add-browser'].update(visible=True)
+
         if event == 'add-OK':
             file_path = values["input_path"]
             if file_path:
@@ -503,9 +517,13 @@ def main():
 
             else:
                 sg.popup_error("Please enter or select a PDF file path.")
-        # Select valid PDF
+
+        # PDF LIST ITEM SELECTION ------------------------------------------------
         if event == '-LIST-' and nav["-LIST-"].get():
             try:
+                # Clear the length input
+                nav['quiz-len'].update('')
+
                 # Get data from binary file
                 with open(f'./bins/{nav["-LIST-"].get()[0]}', 'rb') as file:
                     try:
@@ -513,17 +531,19 @@ def main():
                     except EOFError:
                         sg.popup_error("Error! Data is corrupted")
                         continue
+
                 # Calculate total questions in pdf
                 total_questions = 0
                 for chapter in pdf_questions:
                     total_questions += len(chapter["question_bank"])
+
                 nav["max-questions"].update(f"{total_questions} )")
                 nav["settings-col"].update(visible=True)
             # Error if the file doesn't exist
             except FileNotFoundError:
                 sg.popup_error("File Not Found! Try adding it again if this error persists.")
 
-        # Quiz length input validation
+        # Quiz length input validation -------------------------------------------
         if event == 'quiz-len':
             if values['quiz-len'] and values['quiz-len'][-1] not in '0123456789':
                 nav['quiz-len'].update(values['quiz-len'][:-1])
@@ -547,14 +567,15 @@ def main():
             else:
                 sg.popup_ok("Please select a PDF to remove")
 
-        # Start Quiz
-
+        # Start Quiz Button ---------------------------------------------
         if event == "Start":
             # Check that everything is entered to begin the quiz
-            if values['quiz-len'] and values['test'] or values['practice']:
+            if values['quiz-len'] and (values['test'] or values['practice']):
                 if not quiz and pdf_questions:
-                    for o,chapter in enumerate(pdf_questions):
-                        print(f'Chapter {o+1} Length: {len(chapter["question_bank"])}')
+                    nav.disable()
+                    nav.hide()
+                    # for o,chapter in enumerate(pdf_questions):
+                    #     print(f'Chapter {o+1} Length: {len(chapter["question_bank"])}')
 
                     # Set quiz type
                     if values['test']:
@@ -644,6 +665,7 @@ def main():
 
                                     current_question += 1
                                     quiz.close()
+
                                     break
                         else:
                             quiz = None
@@ -673,6 +695,8 @@ def main():
                                     if score_event == "Show Details":
                                         print(json.dumps(wrong_questions))
                                         score_screen['details-col'].update(visible=True)
+                    nav.enable()
+                    nav.un_hide()
 
                                 # sg.popup_ok(f"Final Score: {score} / {quiz_total_questions}  -  {score / (quiz_total_questions) * 100:.2f}")
 
